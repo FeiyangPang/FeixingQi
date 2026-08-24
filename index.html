@@ -43,6 +43,11 @@
       </div>
     </div>
 
+    <div class="setup-section">
+      <h2>⛓️ 认输的终极惩罚<span class="hint">（内容保密，玩家认输后才会展示）</span></h2>
+      <textarea id="input-ultimate" rows="3" maxlength="300" placeholder="自定义认输后的终极惩罚内容……"></textarea>
+    </div>
+
     <div class="setup-section rules-box">
       <h2>📜 规则速览</h2>
       <ul>
@@ -58,7 +63,10 @@
       </ul>
     </div>
 
-    <button id="btn-start" class="btn btn-big btn-primary">🎲 开始游戏</button>
+    <div class="setup-actions">
+      <button id="btn-dex" class="btn btn-big">📖 格子图鉴</button>
+      <button id="btn-start" class="btn btn-big btn-primary">🎲 开始游戏</button>
+    </div>
   </div>
 </div>
 
@@ -70,6 +78,7 @@
       <span id="layer-badge" class="layer-badge">第 1 层</span>
     </div>
     <div class="header-right">
+      <button id="btn-dex-game" class="btn btn-icon" title="格子图鉴">📖</button>
       <button id="btn-sound" class="btn btn-icon" title="音效开关">🔊</button>
       <button id="btn-surrender" class="btn btn-danger">🏳️ 认输</button>
     </div>

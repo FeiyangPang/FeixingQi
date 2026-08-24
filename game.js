@@ -193,14 +193,15 @@ const REWARDS = [
   { icon: "🛡️", text: "获得免罚护体卡！下一个惩罚格自动失效。", shield: true },
 ];
 
-const ULTIMATE_TEXT =
+const DEFAULT_ULTIMATE =
   "认输者将被【彻底拘束】（绑好手脚，完全不能反抗），协助者可以使用工具库里的所有工具，挠任何部位、任意时长，直到TA满意为止。求饶无效，认输无效，这一次没有暂停键。";
 
-/* ---------------- 设置（玩家名 & 工具库） ---------------- */
+/* ---------------- 设置（玩家名 & 工具库 & 终极惩罚） ---------------- */
 let settings = {
   victim: "宝贝",
   master: "主人",
   tools: DEFAULT_TOOLS.slice(),
+  ultimate: DEFAULT_ULTIMATE,
 };
 
 function loadSettings() {
@@ -209,6 +210,7 @@ function loadSettings() {
     if (raw) {
       const s = JSON.parse(raw);
       if (s && Array.isArray(s.tools) && s.tools.length) settings = s;
+      if (!settings.ultimate) settings.ultimate = DEFAULT_ULTIMATE;
     }
   } catch (e) { /* 忽略损坏的存档 */ }
 }
@@ -582,8 +584,9 @@ function spinDurationWheel(layer, mult = 1) {
  */
 function runTimer(opts) {
   return new Promise((resolve) => {
-    let remaining = Math.round(opts.minutes * 60);
-    let total = remaining;
+    const initialSeconds = Math.round(opts.minutes * 60);
+    let remaining = initialSeconds;
+    let total = initialSeconds;
     let paused = false;
     let failCount = 0;
     let interval = null;
@@ -678,7 +681,7 @@ function runTimer(opts) {
           cardHTML({
             icon: "⚠️", title: "确定认输？",
             desc: "认输将直接触发终极惩罚，没有回头路！",
-            sub: ULTIMATE_TEXT,
+            sub: "终极惩罚的内容是保密的，认输之后才会揭晓……",
           }),
           [
             { text: "我再坚持一下", cls: "btn-success", value: false },
@@ -691,6 +694,31 @@ function runTimer(opts) {
         startTicking();
       };
       btns.appendChild(giveUpBtn);
+
+      // 小字工具按钮：跳过读秒 / 重新计时（计时出问题时的补救手段）
+      const mini = document.createElement("div");
+      mini.className = "timer-mini-row";
+      const skipBtn = document.createElement("button");
+      skipBtn.className = "btn-mini";
+      skipBtn.textContent = "⏭ 跳过读秒";
+      skipBtn.title = "直接视为计时结束";
+      skipBtn.onclick = () => { AudioFX.ding(); stop("done"); };
+      mini.appendChild(skipBtn);
+      const resetBtn = document.createElement("button");
+      resetBtn.className = "btn-mini";
+      resetBtn.textContent = "🔄 重新计时";
+      resetBtn.title = "重置回初始时长重新开始";
+      resetBtn.onclick = () => {
+        remaining = initialSeconds;
+        total = initialSeconds;
+        paused = false;
+        AudioFX.tick();
+        buildUI();
+        render();
+        status.textContent = "已重新计时，重新开始！";
+      };
+      mini.appendChild(resetBtn);
+      modalEl.appendChild(mini);
     }
 
     buildUI();
@@ -983,7 +1011,7 @@ async function doSurrender() {
     cardHTML({
       icon: "⛓️", tag: "🏳️ 认输", tagCls: "tag-danger",
       title: "终 极 惩 罚",
-      desc: ULTIMATE_TEXT,
+      desc: esc(settings.ultimate).replaceAll("\n", "<br>"),
       sub: `${esc(settings.victim)}，你曾经也是个顽强的冒险家，直到你按下了认输键……`,
     }),
     [{ text: "🔄 重新开始游戏", value: 1 }]
@@ -1005,6 +1033,56 @@ async function doWin() {
     [{ text: "🔄 再来一局", value: 1 }]
   );
   location.reload();
+}
+
+/* ---------------- 图鉴 ---------------- */
+const DEX_CELLS = [
+  ["start", "起点 / 层起点", "每层的出发格，安全无事件。"],
+  ["punish", "惩罚格", "自动抽取工具轮盘和时长轮盘，被挠指定部位。中途撑不住喊停 = 加时3分钟，休息后继续。层数越高，残忍工具概率越大、时长越长（最长30分钟）。"],
+  ["challenge", "挑战格", "完成挑战安全通过；失败则触发加倍惩罚（工具至少「残忍」级、时长×1.5）。"],
+  ["interrogate", "拷问格", "如实招供/照做即可过关；选择硬挺则接受挠痒拷问，扛过全程也算赢。"],
+  ["sock", "袜子格", "脱袜子/穿袜子等小事件，影响接下来脚部的「防御力」。"],
+  ["reward", "奖励格", "休息、吃喝、前进2格、免罚护体卡等好事，越往后越稀少。"],
+  ["reverse", "反杀格", "极其稀有！被惩罚者反客为主，甩骰子决定次数（1~3次），反过来抽轮盘挠协助者。"],
+  ["portal", "传送门", "仅地狱层出现。踩中直接摔回第二层的同一位置……"],
+  ["stairs", "层间入口", "位于棋盘中心。碰到就自动进入下一层（不会走过头），奖励休息2分钟。"],
+  ["goal", "终点", "必须正好踩中，走过头原地不动。通关奖励：今晚免受一切惩罚 + 命令对方做一件事。"],
+];
+
+function dexReplace(s) {
+  return esc(s).replaceAll("{tool}", "〔轮盘工具〕").replaceAll("{dur}", "〔轮盘时长〕");
+}
+
+async function showDex() {
+  const cellRows = DEX_CELLS.map(([type, name, desc]) =>
+    `<div class="dex-item dex-cell"><span class="dex-ico">${CELL_META[type].icon}</span><span><b>${name}</b>：${desc}</span></div>`
+  ).join("");
+  const punishRows = PUNISH_TEMPLATES.map((t) =>
+    `<div class="dex-item"><b>${esc(t.pos)}</b> → 挠<b>${esc(t.part)}</b></div>`
+  ).join("");
+  const chalRows = CHALLENGES.map((c) =>
+    `<div class="dex-item"><b>${esc(c.name)}</b>：${dexReplace(c.desc)}</div>`
+  ).join("");
+  const interRows = INTERROGATIONS.map((t) => `<div class="dex-item">${esc(t)}</div>`).join("");
+  const sockRows = SOCK_EVENTS.map((t) => `<div class="dex-item">${esc(t)}</div>`).join("");
+  const rewardRows = REWARDS.map((r) => `<div class="dex-item">${r.icon} ${esc(r.text)}</div>`).join("");
+
+  await showModal(
+    `<div class="modal-icon">📖</div><h2>格子图鉴</h2>` +
+    `<div class="dex">` +
+    `<h3>🗺️ 格子总览</h3>${cellRows}` +
+    `<h3>🕷️ 惩罚姿势库（工具、时长由轮盘决定）</h3>${punishRows}` +
+    `<h3>⚔️ 挑战库</h3>${chalRows}` +
+    `<h3>🎤 拷问库</h3>${interRows}` +
+    `<h3>🧦 袜子事件</h3>${sockRows}` +
+    `<h3>🎁 奖励库</h3>${rewardRows}` +
+    `<h3>📈 层数规则</h3>` +
+    `<div class="dex-item">1F 温柔层：温和工具概率高，时长 1~5 分钟。</div>` +
+    `<div class="dex-item">2F 残忍层：残忍工具概率上升，时长 3~12 分钟。</div>` +
+    `<div class="dex-item">3F 地狱层：极刑工具概率最高，时长 5~30 分钟，还有传送门陷阱。</div>` +
+    `</div>`,
+    [{ text: "关闭图鉴", value: 1 }]
+  );
 }
 
 /* ---------------- 掷骰子 & 移动 ---------------- */
@@ -1180,6 +1258,8 @@ function startGame() {
   const master = $("#input-master").value.trim();
   if (victim) settings.victim = victim;
   if (master) settings.master = master;
+  const ultimate = $("#input-ultimate").value.trim();
+  settings.ultimate = ultimate || DEFAULT_ULTIMATE;
   if (!settings.tools.length) {
     settings.tools = DEFAULT_TOOLS.slice();
     renderToolList();
@@ -1221,7 +1301,15 @@ function init() {
   initBgDecor();
   $("#input-victim").value = settings.victim === "宝贝" ? "" : settings.victim;
   $("#input-master").value = settings.master === "主人" ? "" : settings.master;
+  $("#input-ultimate").value = settings.ultimate;
   renderToolList();
+
+  $("#btn-dex").onclick = () => { AudioFX.tick(); showDex(); };
+  $("#btn-dex-game").onclick = () => {
+    if (state.busy || overlay.classList.contains("active")) return;
+    AudioFX.tick();
+    showDex();
+  };
 
   $("#btn-add-tool").onclick = () => {
     const name = $("#input-tool-name").value.trim();
@@ -1253,7 +1341,7 @@ function init() {
       cardHTML({
         icon: "⚠️", title: "确定认输？",
         desc: "认输将直接触发终极惩罚，没有回头路！",
-        sub: ULTIMATE_TEXT,
+        sub: "终极惩罚的内容是保密的，认输之后才会揭晓……",
       }),
       [
         { text: "我再坚持一下", cls: "btn-success", value: false },

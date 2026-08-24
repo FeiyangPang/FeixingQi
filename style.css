@@ -139,6 +139,17 @@ body {
 .tool-add-row input { flex: 1; }
 .tool-add-row select option { background: var(--card); }
 
+.setup-section textarea {
+  width: 100%; padding: 10px 14px; border-radius: 10px;
+  border: 1px solid rgba(255,255,255,.15); background: rgba(0,0,0,.25);
+  color: var(--text); font-family: inherit; font-size: 14px; line-height: 1.6;
+  resize: vertical; outline: none;
+}
+.setup-section textarea:focus { border-color: var(--pink); }
+
+.setup-actions { display: flex; gap: 12px; margin-top: 8px; }
+.setup-actions .btn { flex: 1; }
+
 .rules-box ul { list-style: none; }
 .rules-box li {
   font-size: 13px; color: var(--text-dim); line-height: 1.8;
@@ -495,6 +506,33 @@ body {
   transition: width .5s linear;
 }
 .timer-status { font-size: 14px; color: var(--text-dim); min-height: 22px; }
+
+/* 计时器小字工具按钮（跳过/重置） */
+.timer-mini-row {
+  display: flex; justify-content: center; gap: 22px; margin-top: 14px;
+}
+.btn-mini {
+  background: none; border: none; cursor: pointer;
+  color: var(--text-dim); font-size: 12px; font-family: inherit;
+  text-decoration: underline; text-underline-offset: 3px;
+  padding: 2px 4px; opacity: .7;
+}
+.btn-mini:hover { color: var(--text); opacity: 1; }
+
+/* ---- 图鉴 ---- */
+.dex { text-align: left; }
+.dex h3 {
+  color: var(--gold); font-size: 15px; margin: 18px 0 8px;
+  border-bottom: 1px solid rgba(255,255,255,.1); padding-bottom: 5px;
+}
+.dex-item {
+  font-size: 13px; color: var(--text-dim); line-height: 1.7;
+  padding: 7px 11px; background: rgba(255,255,255,.045);
+  border-radius: 9px; margin-bottom: 6px;
+}
+.dex-item b { color: var(--text); }
+.dex-cell { display: flex; gap: 10px; align-items: flex-start; }
+.dex-cell .dex-ico { font-size: 20px; line-height: 1.4; flex-shrink: 0; }
 
 /* ---- 终局画面 ---- */
 .final-screen h2 { font-size: 34px; margin: 10px 0 16px; }
