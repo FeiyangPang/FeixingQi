@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>挠痒痒惩罚飞行棋</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- 全屏漂浮背景装饰 -->
+<div id="bg-decor"></div>
+
+<!-- ========== 设置界面 ========== -->
+<div id="screen-setup" class="screen active">
+  <div class="setup-card">
+    <h1 class="game-title">🪶 挠痒痒惩罚飞行棋 🪶</h1>
+    <p class="subtitle">三层棋盘 · 越走越残忍 · 正好踩中终点才算赢</p>
+
+    <div class="setup-section">
+      <h2>👥 玩家</h2>
+      <div class="name-row">
+        <label>被惩罚者（甩骰子的人）</label>
+        <input type="text" id="input-victim" placeholder="比如：宝贝" maxlength="8">
+      </div>
+      <div class="name-row">
+        <label>协助者（执行惩罚的人）</label>
+        <input type="text" id="input-master" placeholder="比如：主人" maxlength="8">
+      </div>
+    </div>
+
+    <div class="setup-section">
+      <h2>🧤 挠痒工具库<span class="hint">（按手里有的工具增删，残忍度影响后期抽中概率）</span></h2>
+      <div id="tool-list" class="tool-list"></div>
+      <div class="tool-add-row">
+        <input type="text" id="input-tool-name" placeholder="新工具名称" maxlength="10">
+        <select id="input-tool-cruelty">
+          <option value="1">😊 温和</option>
+          <option value="2">😈 残忍</option>
+          <option value="3">💀 极刑</option>
+        </select>
+        <button id="btn-add-tool" class="btn btn-small">添加</button>
+      </div>
+    </div>
+
+    <div class="setup-section rules-box">
+      <h2>📜 规则速览</h2>
+      <ul>
+        <li>只有一个棋子，由<b>被惩罚者</b>甩骰子，顺时针绕棋盘走，走到哪个格子就接受哪个格子的内容。</li>
+        <li>🕷️ <b>惩罚格</b>：自动播放工具轮盘 + 时长轮盘抽奖动画，倒计时开始挠！中途撑不住喊停 = 加时 3 分钟，休息后继续。</li>
+        <li>⚔️ <b>挑战格</b>：完成挑战安全通过，失败则触发更残忍的加倍惩罚。</li>
+        <li>🎤 <b>拷问格</b>：如实招供/照做可以过关，硬挺就要挨挠。</li>
+        <li>🎁 <b>奖励格</b>：休息、吃喝，极少出现，且越往后越少。</li>
+        <li>🔄 <b>反杀格</b>：极其稀有！被惩罚者反客为主，抽轮盘挠协助者！</li>
+        <li>🌀 <b>传送门</b>（仅第三层）：踩中直接摔回第二层……</li>
+        <li>🪜 <b>层间入口</b>在棋盘中心：碰到入口自动进入下一层，不会走过头。</li>
+        <li>🏁 只有终点必须<b>正好踩中</b>，走过头原地不动。随时可以认输，但认输 = 终极惩罚：被彻底拘束，所有道具伺候，时长由对方心情决定。</li>
+      </ul>
+    </div>
+
+    <button id="btn-start" class="btn btn-big btn-primary">🎲 开始游戏</button>
+  </div>
+</div>
+
+<!-- ========== 游戏界面 ========== -->
+<div id="screen-game" class="screen">
+  <header class="game-header">
+    <div class="header-left">
+      <span class="header-title">🪶 挠痒痒飞行棋</span>
+      <span id="layer-badge" class="layer-badge">第 1 层</span>
+    </div>
+    <div class="header-right">
+      <button id="btn-sound" class="btn btn-icon" title="音效开关">🔊</button>
+      <button id="btn-surrender" class="btn btn-danger">🏳️ 认输</button>
+    </div>
+  </header>
+
+  <div class="game-body">
+    <div class="board-wrap">
+      <div class="layer-tabs" id="layer-tabs">
+        <div class="layer-tab" data-layer="0">1F 温柔层</div>
+        <div class="layer-tab" data-layer="1">2F 残忍层</div>
+        <div class="layer-tab" data-layer="2">3F 地狱层</div>
+      </div>
+      <div id="board" class="board"></div>
+      <div class="board-legend">
+        <span>🕷️惩罚</span><span>⚔️挑战</span><span>🎤拷问</span><span>🧦袜子</span>
+        <span>🎁奖励</span><span>🔄反杀</span><span>🌀传送</span><span>🪜入口</span>
+      </div>
+    </div>
+
+    <div class="side-panel">
+      <div class="dice-zone">
+        <div class="scene">
+          <div id="dice" class="dice">
+            <div class="face face-1"><span class="dot"></span></div>
+            <div class="face face-2"><span class="dot"></span><span class="dot"></span></div>
+            <div class="face face-3"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+            <div class="face face-4"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+            <div class="face face-5"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+            <div class="face face-6"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+          </div>
+        </div>
+        <button id="btn-roll" class="btn btn-big btn-primary">🎲 甩骰子</button>
+        <div id="roll-hint" class="roll-hint"></div>
+      </div>
+      <div class="log-panel">
+        <h3>📖 冒险日志</h3>
+        <div id="log" class="log"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== 通用弹窗 ========== -->
+<div id="modal-overlay" class="modal-overlay">
+  <div id="modal" class="modal"></div>
+</div>
+
+<!-- 彩带画布 -->
+<canvas id="confetti-canvas"></canvas>
+
+<script src="game.js"></script>
+</body>
+</html>
