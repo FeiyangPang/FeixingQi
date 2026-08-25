@@ -139,6 +139,25 @@ body {
 .tool-add-row input { flex: 1; }
 .tool-add-row select option { background: var(--card); }
 
+.check-row {
+  display: flex; align-items: center; gap: 9px;
+  margin-top: 12px; font-size: 14px; color: var(--text-dim);
+  cursor: pointer; user-select: none;
+}
+.check-row input[type="checkbox"] {
+  width: 17px; height: 17px; accent-color: var(--pink); cursor: pointer;
+}
+
+.slider-row { display: flex; align-items: center; gap: 16px; }
+.slider-row input[type="range"] {
+  flex: 1; accent-color: var(--pink); cursor: pointer; height: 6px;
+}
+.slider-value {
+  font-size: 17px; font-weight: bold; color: var(--gold);
+  min-width: 52px; text-align: center;
+  background: rgba(255,212,94,.1); border-radius: 8px; padding: 5px 10px;
+}
+
 .setup-section textarea {
   width: 100%; padding: 10px 14px; border-radius: 10px;
   border: 1px solid rgba(255,255,255,.15); background: rgba(0,0,0,.25);
@@ -176,6 +195,11 @@ body {
   background: linear-gradient(135deg, var(--purple), var(--pink));
   border-radius: 999px; padding: 5px 16px; font-size: 14px; font-weight: bold;
   box-shadow: 0 0 14px rgba(157,107,255,.5);
+}
+.posture-badge {
+  background: linear-gradient(135deg, #2fae72, #1f8f8a);
+  border-radius: 999px; padding: 5px 16px; font-size: 14px; font-weight: bold;
+  box-shadow: 0 0 14px rgba(47,174,114,.4);
 }
 
 .game-body {
@@ -292,6 +316,8 @@ body {
   50% { filter: brightness(1.35); }
 }
 .cell.type-portal { background: linear-gradient(180deg, #6b7bff, #3742aa); box-shadow: 0 5px 0 #232a70, 0 10px 16px rgba(0,0,0,.35), inset 0 2px 0 rgba(255,255,255,.3); }
+.cell.type-minigame { background: linear-gradient(180deg, #ffb35e, #e0672a); box-shadow: 0 5px 0 #9c4318, 0 10px 16px rgba(0,0,0,.35), inset 0 2px 0 rgba(255,255,255,.35); }
+.cell.type-massager { background: linear-gradient(180deg, #4ecdc4, #1f8f8a); box-shadow: 0 5px 0 #14615d, 0 10px 16px rgba(0,0,0,.35), inset 0 2px 0 rgba(255,255,255,.3); }
 .cell.type-start { background: linear-gradient(180deg, #8fa3b8, #5c6f85); box-shadow: 0 5px 0 #3d4c5e, 0 10px 16px rgba(0,0,0,.35), inset 0 2px 0 rgba(255,255,255,.3); }
 .cell.type-stairs, .cell.type-goal {
   background: linear-gradient(180deg, #ffe08a, #e0a12a);
@@ -485,7 +511,27 @@ body {
   filter: drop-shadow(0 2px 4px rgba(0,0,0,.5));
   margin-bottom: -12px; z-index: 3;
 }
-#wheel-canvas { border-radius: 50%; box-shadow: 0 0 0 6px rgba(255,255,255,.1), 0 10px 40px rgba(0,0,0,.5); }
+.wheel-canvas { border-radius: 50%; box-shadow: 0 0 0 6px rgba(255,255,255,.1), 0 10px 40px rgba(0,0,0,.5); }
+
+/* 三轮盘同抽 */
+.wheels-row {
+  display: flex; justify-content: center; align-items: flex-start;
+  gap: 14px; flex-wrap: wrap; margin-top: 6px;
+}
+.wheel-box.small .wheel-pointer { font-size: 22px; margin-bottom: -9px; }
+.wheel-box.small .wheel-canvas { box-shadow: 0 0 0 4px rgba(255,255,255,.1), 0 6px 22px rgba(0,0,0,.45); }
+.wheel-mini-title {
+  font-size: 13px; font-weight: bold; color: var(--gold); margin-bottom: 2px;
+}
+.wheel-mini-result {
+  min-height: 34px; margin-top: 8px;
+  font-size: 13px; font-weight: bold;
+}
+.wheel-mini-result .mini-banner {
+  display: inline-block; padding: 5px 12px; border-radius: 10px;
+  background: rgba(255,255,255,.09); border: 1px dashed rgba(255,255,255,.25);
+  animation: popIn .35s cubic-bezier(.3, 1.6, .6, 1);
+}
 
 /* ---- 计时器 ---- */
 .timer-display {

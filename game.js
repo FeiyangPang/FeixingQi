@@ -2,7 +2,7 @@
 
 /* ==========================================================
  *  挠痒痒惩罚飞行棋
- *  纯前端单文件逻辑：棋盘生成 / 骰子 / 轮盘 / 计时器 / 音效
+ *  纯前端逻辑：按层生成棋盘 / 骰子 / 姿势轮盘 / 三轮盘同抽 / 计时器 / 音效
  * ========================================================== */
 
 /* ---------------- 工具函数 ---------------- */
@@ -117,7 +117,8 @@ const AudioFX = {
 };
 
 /* ---------------- 游戏内容数据 ---------------- */
-const LS_KEY = "tickle_ludo_settings_v1";
+const LS_KEY = "tickle_ludo_settings_v2";
+const LS_KEY_V1 = "tickle_ludo_settings_v1";
 
 const DEFAULT_TOOLS = [
   { name: "手指", cruelty: 1 },
@@ -125,48 +126,51 @@ const DEFAULT_TOOLS = [
   { name: "毛刷", cruelty: 2 },
   { name: "气垫梳", cruelty: 3 },
   { name: "撸猫手套", cruelty: 3 },
+  { name: "电动牙刷", cruelty: 3 },
+];
+
+// 按名称微调抽中概率：手指更常见，羽毛略少
+const NAME_BIAS = { "手指": 1.7, "羽毛": 0.55 };
+
+const DEFAULT_POSTURES = [
+  "趴着", "跪坐", "平躺", "站立双手吊起", "驷马束缚", "大字束缚", "足枷", "刑椅",
+];
+
+const BODY_PARTS = [
+  "腋窝", "脚心", "肚子", "腰侧", "膝盖窝", "大腿根", "脖子和耳后", "脚趾缝", "全身游走",
 ];
 
 const CRUELTY_ICON = { 1: "😊", 2: "😈", 3: "💀" };
-const LAYER_NAMES = ["1F 温柔层", "2F 残忍层", "3F 地狱层"];
+const TIER_NAMES = ["温柔层", "残忍层", "地狱层"];
+const TIER_DECO = ["🌸", "🔥", "💀"];
 
-// 各层抽工具时，不同残忍度的权重（越往后越残忍）
+// 各难度档抽工具时，不同残忍度的权重（越往后越残忍）
 const TOOL_WEIGHTS = [
   { 1: 5, 2: 2, 3: 1 },
   { 1: 3, 2: 3, 3: 2 },
   { 1: 1, 2: 3, 3: 5 },
 ];
 
-// 各层时长轮盘（分钟 + 权重）
+// 各难度档时长轮盘（分钟 + 权重）
 const DURATION_WHEELS = [
   [ { v: 1, w: 3 }, { v: 2, w: 3 }, { v: 3, w: 2 }, { v: 4, w: 1 }, { v: 5, w: 1 } ],
   [ { v: 3, w: 3 }, { v: 5, w: 3 }, { v: 8, w: 2 }, { v: 10, w: 2 }, { v: 12, w: 1 } ],
   [ { v: 5, w: 2 }, { v: 8, w: 3 }, { v: 10, w: 3 }, { v: 15, w: 2 }, { v: 20, w: 2 }, { v: 25, w: 1 }, { v: 30, w: 1 } ],
 ];
 
-const PUNISH_TEMPLATES = [
-  { pos: "双手被吊起（或举高不许放下）", part: "腋窝" },
-  { pos: "趴下，脚踝被固定", part: "脚心" },
-  { pos: "平躺，双手压在身下不许拿出来", part: "肚子和腰侧" },
-  { pos: "侧躺被紧紧抱住", part: "膝盖窝和大腿" },
-  { pos: "坐好背对对方，不许缩脖子", part: "脖子和耳后" },
-  { pos: "脱掉袜子，脚趾被扳住", part: "脚趾缝" },
-  { pos: "四肢摊开躺平（可用枕头压住手脚）", part: "全身随机游走" },
-];
-
 const CHALLENGES = [
-  { name: "忍笑挑战", desc: "被{tool}挠痒{dur}，全程不许笑出声。可以憋、可以扭，但笑出声即失败！" },
-  { name: "木头人", desc: "保持一个姿势一动不动，被{tool}挠{dur}。明显移动或躲闪即失败！" },
-  { name: "静音模式", desc: "被{tool}挠{dur}，不许发出任何声音（笑声、叫声、求饶通通算失败）！" },
+  { name: "忍笑挑战", desc: "被{tool}挠{part}{dur}，全程不许笑出声。可以憋、可以扭，但笑出声即失败！" },
+  { name: "木头人", desc: "保持姿势一动不动，被{tool}挠{part}{dur}。明显移动或躲闪即失败！" },
+  { name: "静音模式", desc: "被{tool}挠{part}{dur}，不许发出任何声音（笑声、叫声、求饶通通算失败）！" },
   { name: "高举双手", desc: "双臂高高举起{dur}不许放下，期间腋窝随时会被{tool}偷袭。手放下来即失败！" },
   { name: "脚趾倔强", desc: "被{tool}挠脚心{dur}，脚趾全程不许蜷缩。蜷了即失败！" },
   { name: "脚趾夹夹乐", desc: "脚趾夹住一支笔（或小物件），被{tool}挠脚心{dur}。物件掉落即失败！" },
-  { name: "挠痒背诗", desc: "在被{tool}挠痒的同时完整背出一首古诗。背错或卡壳超过5秒即失败（限时{dur}）！" },
-  { name: "口算大师", desc: "被{tool}挠痒的同时连续答对5道两位数加减法（对方出题）。答错2次即失败（限时{dur}）！" },
-  { name: "闻袜子挑战", desc: "鼻子前放上刚脱下来的袜子，同时被{tool}挠{dur}。必须乖乖闻着保持呼吸，憋气或扭头躲开即失败！" },
-  { name: "憋气大师", desc: "深吸一口气憋住，然后被{tool}狂挠。每轮憋气15秒、共3轮，中途笑场漏气即失败（限时{dur}内完成）！" },
-  { name: "撒娇模式", desc: "被{tool}挠{dur}，全程必须用最嗲的撒娇语气说话，语气不够嗲即失败（对方裁定）！" },
-  { name: "花式求饶", desc: "被{tool}挠{dur}，必须不重样地花式求饶不许停嘴，但绝对不许说「停」字，说了即失败！" },
+  { name: "挠痒背诗", desc: "在被{tool}挠{part}的同时完整背出一首古诗。背错或卡壳超过5秒即失败（限时{dur}）！" },
+  { name: "口算大师", desc: "被{tool}挠{part}的同时连续答对5道两位数加减法（对方出题）。答错2次即失败（限时{dur}）！" },
+  { name: "闻袜子挑战", desc: "鼻子前放上刚脱下来的袜子，同时被{tool}挠{part}{dur}。必须乖乖闻着保持呼吸，憋气或扭头躲开即失败！" },
+  { name: "憋气大师", desc: "深吸一口气憋住，然后被{tool}狂挠{part}。每轮憋气15秒、共3轮，中途笑场漏气即失败（限时{dur}内完成）！" },
+  { name: "撒娇模式", desc: "被{tool}挠{part}{dur}，全程必须用最嗲的撒娇语气说话，语气不够嗲即失败（对方裁定）！" },
+  { name: "花式求饶", desc: "被{tool}挠{part}{dur}，必须不重样地花式求饶不许停嘴，但绝对不许说「停」字，说了即失败！" },
 ];
 
 const INTERROGATIONS = [
@@ -193,26 +197,61 @@ const REWARDS = [
   { icon: "🛡️", text: "获得免罚护体卡！下一个惩罚格自动失效。", shield: true },
 ];
 
+const MINIGAMES = [
+  { name: "猜数字", desc: "{master}心里想一个 1~100 的数字，{victim}最多猜 7 次，每次提示「大了/小了」。7 次内猜中即获胜！" },
+  { name: "24点", desc: "{master}随机报出 4 个 1~10 的数字，{victim}在 60 秒内用加减乘除算出 24 即获胜（可心算或口述过程）！" },
+  { name: "脚心写字猜字", desc: "{master}用手指在{victim}的脚心上一笔一画写一个字，{victim}忍着痒最多猜 3 次，猜中即获胜！" },
+];
+
 const DEFAULT_ULTIMATE =
   "认输者将被【彻底拘束】（绑好手脚，完全不能反抗），协助者可以使用工具库里的所有工具，挠任何部位、任意时长，直到TA满意为止。求饶无效，认输无效，这一次没有暂停键。";
 
-/* ---------------- 设置（玩家名 & 工具库 & 终极惩罚） ---------------- */
-let settings = {
-  victim: "宝贝",
-  master: "主人",
-  tools: DEFAULT_TOOLS.slice(),
-  ultimate: DEFAULT_ULTIMATE,
-};
+/* ---------------- 设置 ---------------- */
+function defaultSettings() {
+  return {
+    victim: "宝贝",
+    master: "主人",
+    tools: DEFAULT_TOOLS.map((t) => ({ ...t })),
+    postures: DEFAULT_POSTURES.slice(),
+    massager: true,
+    layers: 3,
+    ultimate: DEFAULT_ULTIMATE,
+    chalReward: "",
+    chalFail: "",
+  };
+}
+
+let settings = defaultSettings();
 
 function loadSettings() {
+  settings = defaultSettings();
   try {
     const raw = localStorage.getItem(LS_KEY);
     if (raw) {
       const s = JSON.parse(raw);
-      if (s && Array.isArray(s.tools) && s.tools.length) settings = s;
-      if (!settings.ultimate) settings.ultimate = DEFAULT_ULTIMATE;
+      if (s && typeof s === "object") Object.assign(settings, s);
+    } else {
+      // 从 v1 存档迁移
+      const rawV1 = localStorage.getItem(LS_KEY_V1);
+      if (rawV1) {
+        const s1 = JSON.parse(rawV1);
+        if (s1 && typeof s1 === "object") {
+          if (s1.victim) settings.victim = s1.victim;
+          if (s1.master) settings.master = s1.master;
+          if (s1.ultimate) settings.ultimate = s1.ultimate;
+          if (Array.isArray(s1.tools) && s1.tools.length) {
+            settings.tools = s1.tools;
+            if (!settings.tools.some((t) => t.name === "电动牙刷")) {
+              settings.tools.push({ name: "电动牙刷", cruelty: 3 });
+            }
+          }
+        }
+      }
     }
   } catch (e) { /* 忽略损坏的存档 */ }
+  if (!Array.isArray(settings.tools) || !settings.tools.length) settings.tools = DEFAULT_TOOLS.map((t) => ({ ...t }));
+  if (!Array.isArray(settings.postures) || !settings.postures.length) settings.postures = DEFAULT_POSTURES.slice();
+  settings.layers = Math.min(7, Math.max(3, Number(settings.layers) || 3));
 }
 
 function saveSettings() {
@@ -239,12 +278,31 @@ function renderToolList() {
   });
 }
 
-/* ---------------- 棋盘生成 ---------------- */
-/* 路径共 54 格，每层 18 格：局部 0 层起点 | 1-16 内容格（顺时针绕环）| 17 中心入口/终点
-   0 起点 → 1-16 一层 → 17 入口(自动进) → 18 二层起点 → 19-34 → 35 入口 → 36 三层起点 → 37-52 → 53 终点 */
-const TOTAL = 54;
+function renderPostureList() {
+  const wrap = $("#posture-list");
+  wrap.innerHTML = "";
+  settings.postures.forEach((p, i) => {
+    const chip = document.createElement("span");
+    chip.className = "tool-chip";
+    chip.innerHTML = `🧘 ${esc(p)}`;
+    const del = document.createElement("button");
+    del.textContent = "✕";
+    del.title = "删除";
+    del.onclick = () => {
+      settings.postures.splice(i, 1);
+      saveSettings();
+      renderPostureList();
+    };
+    chip.appendChild(del);
+    wrap.appendChild(chip);
+  });
+}
+
+/* ---------------- 棋盘生成（按层生成，进层时才确定内容） ---------------- */
+/* 每层 18 格：局部 0 层起点 | 1-16 内容格（顺时针绕环）| 17 中心入口（末层为终点） */
 const LAYER_SIZE = 18;
-const GOAL = TOTAL - 1;
+let TOTAL = 54;
+let GOAL = 53;
 
 const CELL_META = {
   start:       { icon: "🚩", label: "起点" },
@@ -255,49 +313,79 @@ const CELL_META = {
   reward:      { icon: "🎁", label: "奖励" },
   reverse:     { icon: "🔄", label: "反杀" },
   portal:      { icon: "🌀", label: "传送" },
+  minigame:    { icon: "🎯", label: "游戏" },
+  massager:    { icon: "📳", label: "按摩仪" },
   stairs:      { icon: "🪜", label: "入口" },
   goal:        { icon: "🏁", label: "终点" },
 };
 
-// 每层 16 个内容格的类型配比（会被打乱）
-const LAYER_COMPOSITION = [
-  { punish: 5, challenge: 5, interrogate: 2, sock: 1, reward: 2, reverse: 1 },              // 16 格
-  { punish: 6, challenge: 4, interrogate: 3, sock: 1, reward: 1, reverse: 1 },              // 16 格
-  { punish: 6, challenge: 3, interrogate: 2, sock: 1, reward: 1, reverse: 1, portal: 2 },   // 16 格
-];
-
 let board = [];
 
-function buildBoard() {
-  board = new Array(TOTAL);
-  board[0] = { type: "start", label: "起点" };
-  board[17] = { type: "stairs", toLayer: 1 };
-  board[18] = { type: "start", label: "二层" };
-  board[35] = { type: "stairs", toLayer: 2 };
-  board[36] = { type: "start", label: "三层" };
-  board[GOAL] = { type: "goal" };
+const layerOf = (pos) => Math.floor(pos / LAYER_SIZE);
+const tierOf = (layer) => Math.min(2, Math.floor((layer * 3) / state.layers));
+const layerName = (layer) => `${layer + 1}F ${TIER_NAMES[tierOf(layer)]}`;
 
-  const ranges = [ [1, 16], [19, 34], [37, 52] ];
-  ranges.forEach(([from, to], layer) => {
-    const types = [];
-    for (const [type, count] of Object.entries(LAYER_COMPOSITION[layer])) {
-      for (let i = 0; i < count; i++) types.push(type);
-    }
-    const mixed = shuffle(types);
-    for (let p = from; p <= to; p++) {
-      const type = mixed[p - from];
-      const cell = { type };
-      if (type === "punish") cell.tpl = pick(PUNISH_TEMPLATES);
-      if (type === "challenge") cell.tpl = pick(CHALLENGES);
-      if (type === "interrogate") cell.tpl = pick(INTERROGATIONS);
-      if (type === "sock") cell.tpl = pick(SOCK_EVENTS);
-      if (type === "reward") cell.tpl = pick(REWARDS);
-      board[p] = cell;
-    }
-  });
+function buildBoard() {
+  TOTAL = state.layers * LAYER_SIZE;
+  GOAL = TOTAL - 1;
+  board = new Array(TOTAL);
+  for (let i = 0; i < state.layers; i++) {
+    const base = i * LAYER_SIZE;
+    board[base] = { type: "start", label: i === 0 ? "起点" : `${i + 1}层` };
+    board[base + 17] = i === state.layers - 1 ? { type: "goal" } : { type: "stairs" };
+  }
+  buildLayerContent(0);
 }
 
-const layerOf = (pos) => Math.min(2, Math.floor(pos / LAYER_SIZE));
+/** 进入某层时生成该层 16 个内容格（按摩仪格依赖当前脚上状态） */
+function buildLayerContent(layer) {
+  const tier = tierOf(layer);
+  const isFinal = layer === state.layers - 1;
+
+  const counts = {
+    punish: isFinal ? 4 : 5,
+    challenge: isFinal ? 3 : 4,
+    interrogate: 2,
+    sock: 1,
+    reward: tier === 0 ? 2 : 1,
+    minigame: 1,
+  };
+  if (layer >= 1) counts.reverse = 1;            // 反杀从第二层开始才有
+  if (isFinal) counts.portal = 2;                // 传送门只在最后一层
+  if (settings.massager) counts.massager = 1;    // 有按摩仪道具才出现按摩仪格
+
+  // 补齐/裁剪到 16 格
+  let total = Object.values(counts).reduce((s, n) => s + n, 0);
+  while (total < 16) { counts[pick(["punish", "challenge"])]++; total++; }
+  while (total > 16) {
+    if (counts.punish > 2) counts.punish--;
+    else if (counts.challenge > 2) counts.challenge--;
+    else counts.interrogate--;
+    total--;
+  }
+  // 每局小幅扰动，让布局更不可预测
+  if (Math.random() < 0.5 && counts.punish > 3) { counts.punish--; counts.challenge++; }
+  else if (counts.challenge > 3) { counts.challenge--; counts.punish++; }
+
+  const types = [];
+  for (const [type, count] of Object.entries(counts)) {
+    for (let i = 0; i < count; i++) types.push(type);
+  }
+  const mixed = shuffle(types);
+
+  const base = layer * LAYER_SIZE;
+  for (let local = 1; local <= 16; local++) {
+    const type = mixed[local - 1];
+    const cell = { type };
+    if (type === "challenge") cell.tpl = pick(CHALLENGES);
+    if (type === "interrogate") cell.tpl = pick(INTERROGATIONS);
+    if (type === "sock") cell.tpl = pick(SOCK_EVENTS);
+    if (type === "reward") cell.tpl = pick(REWARDS);
+    if (type === "minigame") cell.tpl = pick(MINIGAMES);
+    if (type === "massager") cell.tpl = { mode: state.massagerOn ? "off" : "on" };
+    board[base + local] = cell;
+  }
+}
 
 /* ---------------- 游戏状态 ---------------- */
 const state = {
@@ -306,13 +394,15 @@ const state = {
   over: false,
   shield: false,
   shownLayer: 0,
+  layers: 3,
+  massagerOn: false,
+  posture: "",
 };
 
 /* ---------------- 棋盘渲染 ---------------- */
 let tokenEl = null;
 
-/* 顺时针环形布局（6列×5行的外圈，共 17 个环上格 + 1 个中心入口格）：
-   局部 0-5 顶行左→右 | 6-9 右列下行 | 10-14 底行右→左 | 15-16 左列上行 | 17 棋盘中心 */
+/* 顺时针环形布局（6列×5行的外圈，共 17 个环上格 + 1 个中心入口格） */
 const RING_COORDS = [
   [0, 0], [1, 0], [2, 0], [3, 0], [4, 0], [5, 0],
   [5, 1], [5, 2], [5, 3], [5, 4],
@@ -322,19 +412,31 @@ const RING_COORDS = [
 const CELL_W = 13.2, CELL_H = 16.5, PAD_X = 2.6, PAD_Y = 3;
 const STEP_X = (100 - PAD_X * 2 - CELL_W) / 5;
 const STEP_Y = (100 - PAD_Y * 2 - CELL_H) / 4;
-const LAYER_DECO = ["🌸", "🔥", "💀"];
+
+function renderTabs() {
+  const tabs = $("#layer-tabs");
+  tabs.innerHTML = "";
+  for (let i = 0; i < state.layers; i++) {
+    const tab = document.createElement("div");
+    tab.className = "layer-tab";
+    tab.dataset.layer = i;
+    tab.textContent = `${i + 1}F ${TIER_DECO[tierOf(i)]}`;
+    tabs.appendChild(tab);
+  }
+}
 
 function renderBoard(layer) {
   state.shownLayer = layer;
+  const tier = tierOf(layer);
   const boardEl = $("#board");
   boardEl.innerHTML = "";
-  boardEl.className = "board theme-" + layer;
+  boardEl.className = "board theme-" + tier;
 
   const deco = document.createElement("div");
   deco.className = "center-deco";
   deco.innerHTML =
-    `<span class="deco-icon">${LAYER_DECO[layer]}</span>` +
-    `<span class="deco-name">${LAYER_NAMES[layer]}</span>`;
+    `<span class="deco-icon">${TIER_DECO[tier]}</span>` +
+    `<span class="deco-name">${layerName(layer)}</span>`;
   boardEl.appendChild(deco);
 
   for (let local = 0; local < LAYER_SIZE; local++) {
@@ -349,7 +451,6 @@ function renderBoard(layer) {
       `<span class="cell-icon">${meta.icon}</span>` +
       `<span class="cell-label">${cell.label || meta.label}</span>`;
     if (local === 17) {
-      // 中心入口 / 终点
       el.classList.add("center-cell");
       el.style.left = "40.5%";
       el.style.top = "38%";
@@ -373,7 +474,7 @@ function renderBoard(layer) {
   document.querySelectorAll(".layer-tab").forEach((tab) => {
     tab.classList.toggle("active", Number(tab.dataset.layer) === layer);
   });
-  $("#layer-badge").textContent = LAYER_NAMES[layer];
+  $("#layer-badge").textContent = layerName(layer);
 
   positionToken(false);
 }
@@ -465,6 +566,9 @@ function drawWheel(ctx, items, rotation, highlight = -1) {
   const size = ctx.canvas.width;
   const cx = size / 2, cy = size / 2, r = size / 2 - 4;
   const seg = (Math.PI * 2) / items.length;
+  const fontSize = size < 220 ? 9 : 14;
+  const textOff = size < 220 ? 8 : 12;
+  const hubR = size < 220 ? 17 : 26;
   ctx.clearRect(0, 0, size, size);
   for (let i = 0; i < items.length; i++) {
     const a0 = rotation + i * seg - Math.PI / 2;
@@ -478,41 +582,36 @@ function drawWheel(ctx, items, rotation, highlight = -1) {
     ctx.strokeStyle = "rgba(0,0,0,.35)";
     ctx.lineWidth = 2;
     ctx.stroke();
-    // 文字
     ctx.save();
     ctx.translate(cx, cy);
     ctx.rotate(a0 + seg / 2);
     ctx.textAlign = "right";
     ctx.fillStyle = "#1a1030";
-    ctx.font = "bold 14px 'Microsoft YaHei', sans-serif";
+    ctx.font = `bold ${fontSize}px 'Microsoft YaHei', sans-serif`;
     if (highlight >= 0 && i !== highlight) ctx.fillStyle = "rgba(255,255,255,.4)";
-    ctx.fillText(items[i].label, r - 12, 5);
+    ctx.fillText(items[i].label, r - textOff, fontSize * 0.36);
     ctx.restore();
   }
-  // 中心圆
   ctx.beginPath();
-  ctx.arc(cx, cy, 26, 0, Math.PI * 2);
+  ctx.arc(cx, cy, hubR, 0, Math.PI * 2);
   ctx.fillStyle = "#241640";
   ctx.fill();
   ctx.strokeStyle = "rgba(255,255,255,.3)";
   ctx.stroke();
   ctx.fillStyle = "#ffd45e";
-  ctx.font = "20px sans-serif";
+  ctx.font = `${size < 220 ? 14 : 20}px sans-serif`;
   ctx.textAlign = "center";
-  ctx.fillText("🎯", cx, cy + 7);
+  ctx.fillText("🎯", cx, cy + (size < 220 ? 5 : 7));
 }
 
-/**
- * 弹出轮盘并旋转，返回选中的 item。
- * items: [{label, value, weight}]
- */
+/** 单个大轮盘（用于姿势抽取），自动旋转自动关闭 */
 function spinWheel(title, items) {
   return new Promise((resolve) => {
     modalEl.innerHTML =
       `<h2>${title}</h2>` +
       `<div class="wheel-box">` +
       `<div class="wheel-pointer">▲</div>` +
-      `<canvas id="wheel-canvas" width="300" height="300"></canvas>` +
+      `<canvas class="wheel-canvas" id="wheel-canvas" width="300" height="300"></canvas>` +
       `<p class="modal-sub" id="wheel-status">命运的轮盘开始转动……</p>` +
       `<div id="wheel-result"></div>` +
       `</div>`;
@@ -523,7 +622,6 @@ function spinWheel(title, items) {
     const seg = (Math.PI * 2) / items.length;
     const chosen = weightedPick(items, (it) => it.weight || 1);
 
-    // 最终旋转角：让选中扇区中心停在正上方（指针位置）
     const spins = 5 + rand(3);
     const finalRot = spins * Math.PI * 2 - (chosen + 0.5) * seg;
     const duration = 3600 + rand(800);
@@ -537,7 +635,6 @@ function spinWheel(title, items) {
       const eased = 1 - Math.pow(1 - t, 3);
       const rot = finalRot * eased;
       drawWheel(ctx, items, rot);
-      // 指针下方扇区变化时播放咔哒声
       const pointerSeg = Math.floor((((-rot) % (Math.PI * 2)) + Math.PI * 2) / seg) % items.length;
       if (pointerSeg !== lastSeg) { AudioFX.wheelTick(); lastSeg = pointerSeg; }
       if (t < 1) {
@@ -548,7 +645,6 @@ function spinWheel(title, items) {
         $("#wheel-status").textContent = "命运已裁决！";
         $("#wheel-result").innerHTML =
           `<div class="result-banner">🎯 ${esc(items[chosen].label)}</div>`;
-        // 展示结果后自动进入下一步
         setTimeout(() => { closeModal(); resolve(items[chosen]); }, 1600);
       }
     }
@@ -556,32 +652,117 @@ function spinWheel(title, items) {
   });
 }
 
-function spinToolWheel(layer, minCruelty = 1) {
-  let pool = settings.tools.filter((t) => t.cruelty >= minCruelty);
-  if (!pool.length) pool = settings.tools.slice();
-  const items = pool.map((t) => ({
-    label: `${CRUELTY_ICON[t.cruelty]}${t.name}`,
-    value: t,
-    weight: TOOL_WEIGHTS[layer][t.cruelty] || 1,
-  }));
-  return spinWheel("🧤 抽取挠痒工具", items).then((it) => it.value);
+/**
+ * 多个轮盘同时旋转（省时间）。
+ * defs: [{ name, items }]，返回各轮盘选中的 item 数组
+ */
+function spinWheelsMulti(title, defs) {
+  return new Promise((resolve) => {
+    let html = `<h2>${title}</h2><div class="wheels-row">`;
+    defs.forEach((d, i) => {
+      html +=
+        `<div class="wheel-box small">` +
+        `<div class="wheel-mini-title">${esc(d.name)}</div>` +
+        `<div class="wheel-pointer">▲</div>` +
+        `<canvas class="wheel-canvas" id="wheel-c${i}" width="170" height="170"></canvas>` +
+        `<div class="wheel-mini-result" id="wheel-r${i}"></div>` +
+        `</div>`;
+    });
+    html += `</div><p class="modal-sub" id="wheel-status">三个轮盘同时转动……</p>`;
+    modalEl.innerHTML = html;
+    overlay.classList.add("active");
+
+    const wheels = defs.map((d, i) => {
+      const ctx = $(`#wheel-c${i}`).getContext("2d");
+      const chosen = weightedPick(d.items, (it) => it.weight || 1);
+      const seg = (Math.PI * 2) / d.items.length;
+      const spins = 4 + rand(3);
+      return {
+        items: d.items, ctx, chosen, seg,
+        finalRot: spins * Math.PI * 2 - (chosen + 0.5) * seg,
+        duration: 2800 + i * 550 + rand(300),
+        done: false,
+      };
+    });
+
+    wheels.forEach((w) => drawWheel(w.ctx, w.items, 0));
+    const start = performance.now();
+    let lastSeg = -1;
+
+    function frame(now) {
+      let allDone = true;
+      wheels.forEach((w, i) => {
+        const t = Math.min(1, (now - start) / w.duration);
+        const eased = 1 - Math.pow(1 - t, 3);
+        const rot = w.finalRot * eased;
+        if (t < 1) {
+          allDone = false;
+          drawWheel(w.ctx, w.items, rot);
+          if (i === 0) {
+            const pointerSeg = Math.floor((((-rot) % (Math.PI * 2)) + Math.PI * 2) / w.seg) % w.items.length;
+            if (pointerSeg !== lastSeg) { AudioFX.wheelTick(); lastSeg = pointerSeg; }
+          }
+        } else if (!w.done) {
+          w.done = true;
+          drawWheel(w.ctx, w.items, w.finalRot, w.chosen);
+          AudioFX.ding();
+          $(`#wheel-r${i}`).innerHTML = `<span class="mini-banner">${esc(w.items[w.chosen].label)}</span>`;
+        }
+      });
+      if (!allDone) {
+        requestAnimationFrame(frame);
+      } else {
+        $("#wheel-status").textContent = "命运已裁决！";
+        setTimeout(() => { closeModal(); resolve(wheels.map((w) => w.items[w.chosen])); }, 1800);
+      }
+    }
+    setTimeout(() => requestAnimationFrame(frame), 500);
+  });
 }
 
-function spinDurationWheel(layer, mult = 1) {
-  const items = DURATION_WHEELS[layer].map((d) => ({
-    label: fmtMin(d.v),
-    value: d.v,
-    weight: d.w,
+function toolItems(tier, minCruelty = 1) {
+  let pool = settings.tools.filter((t) => t.cruelty >= minCruelty);
+  if (!pool.length) pool = settings.tools.slice();
+  return pool.map((t) => ({
+    label: `${CRUELTY_ICON[t.cruelty]}${t.name}`,
+    value: t,
+    weight: (TOOL_WEIGHTS[tier][t.cruelty] || 1) * (NAME_BIAS[t.name] || 1),
   }));
-  return spinWheel("⏱️ 抽取时长", items).then((it) => Math.min(30, it.value * mult));
+}
+
+function durationItems(tier) {
+  return DURATION_WHEELS[tier].map((d) => ({ label: fmtMin(d.v), value: d.v, weight: d.w }));
+}
+
+function partItems() {
+  return BODY_PARTS.map((p) => ({ label: p, value: p, weight: 1 }));
+}
+
+/** 部位 + 工具 + 时长 三轮盘同抽 */
+async function spinTriple(tier, { minCruelty = 1, durMult = 1 } = {}) {
+  const [part, tool, dur] = await spinWheelsMulti("🎡 命运三连抽", [
+    { name: "🎯 部位", items: partItems() },
+    { name: "🧤 工具", items: toolItems(tier, minCruelty) },
+    { name: "⏱️ 时长", items: durationItems(tier) },
+  ]);
+  return {
+    part: part.value,
+    tool: tool.value,
+    minutes: Math.min(30, dur.value * durMult),
+  };
+}
+
+/** 每层开始时抽取本层固定姿势 */
+async function drawPosture(layer) {
+  if (!settings.postures.length) { state.posture = "自由姿势"; return; }
+  const items = settings.postures.map((p) => ({ label: p, value: p, weight: 1 }));
+  const it = await spinWheel(`🧘 抽取第 ${layer + 1} 层固定姿势`, items);
+  state.posture = it.value;
+  $("#posture-badge").textContent = `🧘 ${it.value}`;
+  addLog(`🧘 第 ${layer + 1} 层姿势：${it.value}（整层保持）`, true);
 }
 
 /* ---------------- 计时器 ---------------- */
-/**
- * 倒计时弹窗。
- * opts: { title, desc, minutes, victimName, canGiveUp, canEarlyFinish, failAddsMinutes }
- * 返回 'done' | 'surrender' | 'early'，failCount 记录中途失败次数
- */
 function runTimer(opts) {
   return new Promise((resolve) => {
     const initialSeconds = Math.round(opts.minutes * 60);
@@ -734,10 +915,13 @@ const TAGS = {
   interrogate: ["🎤 拷问格", "tag-interrogate"],
   reward: ["🎁 奖励格", "tag-reward"],
   reverse: ["🔄 反杀格", "tag-reverse"],
+  minigame: ["🎯 游戏格", "tag-challenge"],
 };
 
-/** 惩罚完整流程：说明 → 抽工具 → 抽时长 → 倒计时 */
-async function punishFlow({ tpl, layer, minCruelty = 1, durMult = 1, prefix = "", victim, master }) {
+/**
+ * 惩罚完整流程：预告 → 三轮盘同抽（部位/工具/时长） → 最终判决 → 倒计时
+ */
+async function punishFlow({ tier, minCruelty = 1, durMult = 1, prefix = "", victim, master, withPosture = true }) {
   victim = victim || settings.victim;
   master = master || settings.master;
 
@@ -745,28 +929,30 @@ async function punishFlow({ tpl, layer, minCruelty = 1, durMult = 1, prefix = ""
     cardHTML({
       icon: "🕷️", tag: TAGS.punish[0], tagCls: TAGS.punish[1],
       title: prefix ? prefix : "惩罚降临！",
-      desc: `${esc(victim)}：<b>${esc(tpl.pos)}</b>，<br>即将被挠 <b>${esc(tpl.part)}</b>！`,
-      sub: "命运轮盘启动……",
+      desc: withPosture
+        ? `${esc(victim)}：保持本层姿势【<b>${esc(state.posture)}</b>】，<br>部位、工具、时长三连抽即将开始……`
+        : `${esc(victim)}：部位、工具、时长三连抽即将开始……`,
     }),
     2000
   );
 
-  const tool = await spinToolWheel(layer, minCruelty);
-  const minutes = await spinDurationWheel(layer, durMult);
+  const { part, tool, minutes } = await spinTriple(tier, { minCruelty, durMult });
 
   await showModal(
     cardHTML({
       icon: "😈", tag: TAGS.punish[0], tagCls: TAGS.punish[1],
       title: "最终判决",
-      desc: `${esc(victim)} ${esc(tpl.pos)}，<br>被 ${esc(master)} 用 <b>${CRUELTY_ICON[tool.cruelty]}${esc(tool.name)}</b> 挠 <b>${esc(tpl.part)}</b><br>整整 <b>${fmtMin(minutes)}</b>！`,
-      sub: "中途撑不住可以喊停，但要加时3分钟，休息后继续。",
+      desc: (withPosture ? `${esc(victim)} 以【<b>${esc(state.posture)}</b>】固定，<br>` : `${esc(victim)} `) +
+        `被 ${esc(master)} 用 <b>${CRUELTY_ICON[tool.cruelty]}${esc(tool.name)}</b> 挠 <b>${esc(part)}</b><br>整整 <b>${fmtMin(minutes)}</b>！`,
+      sub: "中途撑不住可以喊停，但要加时3分钟，休息后继续。" +
+        (state.massagerOn && withPosture ? "<br>📳 脚心上的按摩仪仍在嗡嗡工作中……" : ""),
     }),
     [{ text: "⏱️ 开始行刑", cls: "btn-danger", value: 1 }]
   );
 
   const { result, failCount } = await runTimer({
     title: "行刑中",
-    desc: `${esc(tool.name)} × ${esc(tpl.part)}`,
+    desc: `${esc(tool.name)} × ${esc(part)}`,
     minutes,
     failAddsMinutes: 3,
   });
@@ -782,11 +968,11 @@ async function punishFlow({ tpl, layer, minCruelty = 1, durMult = 1, prefix = ""
     }),
     [{ text: "继续冒险", value: 1 }]
   );
-  addLog(`🕷️ ${settings.victim} 完成惩罚：${tool.name}挠${tpl.part} ${fmtMin(minutes)}${failCount ? `（喊停${failCount}次）` : ""}`);
+  addLog(`🕷️ ${victim} 完成惩罚：${tool.name}挠${part} ${fmtMin(minutes)}${failCount ? `（喊停${failCount}次）` : ""}`);
   return "done";
 }
 
-async function handlePunish(cell, layer) {
+async function handlePunish(cell, tier) {
   if (state.shield) {
     state.shield = false;
     AudioFX.magic();
@@ -803,24 +989,24 @@ async function handlePunish(cell, layer) {
   AudioFX.danger();
   document.body.classList.add("shake");
   setTimeout(() => document.body.classList.remove("shake"), 500);
-  await punishFlow({ tpl: cell.tpl, layer });
+  await punishFlow({ tier });
 }
 
-async function handleChallenge(cell, layer) {
+async function handleChallenge(cell, tier) {
   await showAutoModal(
     cardHTML({
       icon: "⚔️", tag: TAGS.challenge[0], tagCls: TAGS.challenge[1],
       title: cell.tpl.name,
-      desc: "命运轮盘启动，自动抽取本次挑战的工具和时长……",
-      sub: "挑战成功安全通过；失败则触发更残忍的加倍惩罚！",
+      desc: `保持本层姿势【<b>${esc(state.posture)}</b>】，<br>部位、工具、时长三连抽即将开始……`,
+      sub: "挑战成功安全通过；失败则接受惩罚！",
     }),
     2000
   );
 
-  const tool = await spinToolWheel(layer);
-  const minutes = await spinDurationWheel(layer, 0.6);
+  const { part, tool, minutes } = await spinTriple(tier, { durMult: 0.6 });
   const desc = cell.tpl.desc
     .replaceAll("{tool}", `<b>${esc(tool.name)}</b>`)
+    .replaceAll("{part}", `<b>${esc(part)}</b>`)
     .replaceAll("{dur}", `<b>${fmtMin(minutes)}</b>`);
 
   await showModal(
@@ -828,7 +1014,7 @@ async function handleChallenge(cell, layer) {
       icon: "⚔️", tag: TAGS.challenge[0], tagCls: TAGS.challenge[1],
       title: cell.tpl.name,
       desc,
-      sub: "计时结束后，由双方共同裁定挑战是否成功。",
+      sub: `姿势保持【${esc(state.posture)}】。计时结束后，由双方共同裁定挑战是否成功。`,
     }),
     [{ text: "⏱️ 开始挑战", value: 1 }]
   );
@@ -856,27 +1042,41 @@ async function handleChallenge(cell, layer) {
     AudioFX.success();
     addLog(`⚔️ ${settings.victim} 挑战「${cell.tpl.name}」成功！`, true);
     await showModal(
-      cardHTML({ icon: "🏅", title: "挑战成功！", desc: "顽强的意志！安全通过本格。" }),
+      cardHTML({
+        icon: "🏅", title: "挑战成功！",
+        desc: settings.chalReward
+          ? esc(settings.chalReward)
+          : "顽强的意志！安全通过本格。",
+      }),
       [{ text: "继续前进", value: 1 }]
     );
   } else {
     AudioFX.fail();
-    addLog(`⚔️ ${settings.victim} 挑战「${cell.tpl.name}」失败，触发加倍惩罚！`, true);
-    await showModal(
-      cardHTML({
-        icon: "💀", title: "挑战失败……",
-        desc: "失败的代价：立刻触发一次<b>更残忍</b>的惩罚（工具至少「残忍」级，时长×1.5）！",
-      }),
-      [{ text: "认命吧", cls: "btn-danger", value: 1 }]
-    );
-    await punishFlow({
-      tpl: pick(PUNISH_TEMPLATES), layer,
-      minCruelty: 2, durMult: 1.5, prefix: "挑战失败惩罚！",
-    });
+    addLog(`⚔️ ${settings.victim} 挑战「${cell.tpl.name}」失败！`, true);
+    if (settings.chalFail) {
+      // 自定义失败惩罚：直接展示，不再抽轮盘
+      await showModal(
+        cardHTML({
+          icon: "💀", title: "挑战失败……",
+          desc: esc(settings.chalFail),
+          sub: "执行完毕后继续冒险。",
+        }),
+        [{ text: "认命执行", cls: "btn-danger", value: 1 }]
+      );
+    } else {
+      await showModal(
+        cardHTML({
+          icon: "💀", title: "挑战失败……",
+          desc: "失败的代价：立刻触发一次<b>更残忍</b>的惩罚（工具至少「残忍」级，时长×1.5）！",
+        }),
+        [{ text: "认命吧", cls: "btn-danger", value: 1 }]
+      );
+      await punishFlow({ tier, minCruelty: 2, durMult: 1.5, prefix: "挑战失败惩罚！" });
+    }
   }
 }
 
-async function handleInterrogate(cell, layer) {
+async function handleInterrogate(cell, tier) {
   const resist = await showModal(
     cardHTML({
       icon: "🎤", tag: TAGS.interrogate[0], tagCls: TAGS.interrogate[1],
@@ -907,14 +1107,88 @@ async function handleInterrogate(cell, layer) {
     }),
     [{ text: "上刑吧", cls: "btn-danger", value: 1 }]
   );
-  const r = await punishFlow({
-    tpl: pick(PUNISH_TEMPLATES), layer, prefix: "挠痒拷问！",
-  });
+  const r = await punishFlow({ tier, prefix: "挠痒拷问！" });
   if (r !== "surrender") {
     await showModal(
       cardHTML({ icon: "🫡", title: "嘴真硬！", desc: "扛过了拷问，什么都没招。佩服！" }),
       [{ text: "继续前进", value: 1 }]
     );
+  }
+}
+
+async function handleMinigame(cell, tier) {
+  const desc = cell.tpl.desc
+    .replaceAll("{master}", `<b>${esc(settings.master)}</b>`)
+    .replaceAll("{victim}", `<b>${esc(settings.victim)}</b>`);
+
+  const win = await showModal(
+    cardHTML({
+      icon: "🎯", tag: TAGS.minigame[0], tagCls: TAGS.minigame[1],
+      title: cell.tpl.name,
+      desc,
+      sub: "赢了继续飞行棋；输了接受部位、工具、时长三连抽惩罚！玩完后按真实结果点下方按钮。",
+    }),
+    [
+      { text: "🏆 我赢了", cls: "btn-success", value: true },
+      { text: "💀 我输了", cls: "btn-danger", value: false },
+    ]
+  );
+
+  if (win) {
+    AudioFX.success();
+    addLog(`🎯 ${settings.victim} 在「${cell.tpl.name}」中获胜！`, true);
+    await showModal(
+      cardHTML({ icon: "🏆", title: "旗开得胜！", desc: "游戏获胜，安全通过本格！" }),
+      [{ text: "继续前进", value: 1 }]
+    );
+  } else {
+    AudioFX.fail();
+    addLog(`🎯 ${settings.victim} 在「${cell.tpl.name}」中落败，接受惩罚！`, true);
+    await punishFlow({ tier, prefix: "游戏失败惩罚！" });
+  }
+}
+
+async function handleMassager(cell) {
+  const mode = cell.tpl.mode;
+  if (mode === "on") {
+    if (state.massagerOn) {
+      await showModal(
+        cardHTML({ icon: "📳", title: "按摩仪已就位", desc: "脚心上已经绑着一个按摩仪了，检查一下电量，继续走！" }),
+        [{ text: "嗡嗡嗡……", value: 1 }]
+      );
+      return;
+    }
+    state.massagerOn = true;
+    AudioFX.danger();
+    await showModal(
+      cardHTML({
+        icon: "📳", tag: TAGS.punish[0], tagCls: TAGS.punish[1],
+        title: "按摩仪上脚！",
+        desc: `${esc(settings.master)} 把按摩仪牢牢固定在 ${esc(settings.victim)} 的<b>脚心</b>上并打开开关！`,
+        sub: "在抽到「取下按摩仪」格之前，它会一直嗡嗡作响地陪你走完接下来的路……",
+      }),
+      [{ text: "😖 接受命运", cls: "btn-danger", value: 1 }]
+    );
+    addLog("📳 按摩仪固定在脚心上了！", true);
+  } else {
+    if (!state.massagerOn) {
+      await showModal(
+        cardHTML({ icon: "📳", title: "空欢喜一场", desc: "脚上并没有按摩仪，这个格子对你无效。继续走吧！" }),
+        [{ text: "继续", value: 1 }]
+      );
+      return;
+    }
+    state.massagerOn = false;
+    AudioFX.magic();
+    await showModal(
+      cardHTML({
+        icon: "🕊️", tag: TAGS.reward[0], tagCls: TAGS.reward[1],
+        title: "解脱时刻！",
+        desc: "终于可以取下脚心上的按摩仪了，脚底恢复清净……",
+      }),
+      [{ text: "呼——舒服了", cls: "btn-success", value: 1 }]
+    );
+    addLog("🕊️ 按摩仪取下了，脚底重获自由！", true);
   }
 }
 
@@ -938,7 +1212,7 @@ async function handleReward(cell) {
   addLog(`🎁 奖励：${cell.tpl.text}`, true);
   if (cell.tpl.shield) state.shield = true;
   if (cell.tpl.move) {
-    if (state.pos >= 36 && state.pos + cell.tpl.move > GOAL) {
+    if (layerOf(state.pos) === state.layers - 1 && state.pos + cell.tpl.move > GOAL) {
       addLog("🦶 前进会越过终点，原地不动。");
     } else {
       const entered = await moveSteps(cell.tpl.move);
@@ -947,7 +1221,7 @@ async function handleReward(cell) {
   }
 }
 
-async function handleReverse(cell, layer) {
+async function handleReverse(cell, tier) {
   AudioFX.fanfare();
   await showModal(
     cardHTML({
@@ -972,10 +1246,11 @@ async function handleReverse(cell, layer) {
 
   for (let i = 0; i < times; i++) {
     const r = await punishFlow({
-      tpl: pick(PUNISH_TEMPLATES), layer,
+      tier,
       prefix: `反杀 第 ${i + 1}/${times} 刀！`,
       victim: settings.master,
       master: settings.victim,
+      withPosture: false,
     });
     if (r === "surrender") return;
   }
@@ -993,15 +1268,17 @@ async function handlePortal() {
     cardHTML({
       icon: "🌀", tag: "🌀 传送门", tagCls: "tag-danger",
       title: "脚下一空……",
-      desc: "地狱层的地板裂开了！你摔回了<b>第二层</b>的同一位置……",
-      sub: "刚才的努力，白费了呢。",
+      desc: "地板裂开了！你摔回了<b>上一层</b>的同一位置……",
+      sub: "刚才的努力，白费了呢。（落地后重新抽取该层的固定姿势）",
     }),
     [{ text: "啊啊啊啊", cls: "btn-danger", value: 1 }]
   );
   state.pos -= LAYER_SIZE;
-  addLog(`🌀 踩中传送门！摔回第二层（第 ${state.pos} 格）`, true);
-  renderBoard(layerOf(state.pos));
+  const backLayer = layerOf(state.pos);
+  addLog(`🌀 踩中传送门！摔回第 ${backLayer + 1} 层`, true);
+  renderBoard(backLayer);
   await sleep(300);
+  await drawPosture(backLayer);
 }
 
 async function doSurrender() {
@@ -1027,7 +1304,7 @@ async function doWin() {
     `<div class="final-screen">` +
     cardHTML({
       icon: "🏆", title: "通关成功！！",
-      desc: `<b>${esc(settings.victim)}</b> 穿越了三层挠痒地狱，抵达终点！`,
+      desc: `<b>${esc(settings.victim)}</b> 穿越了 ${state.layers} 层挠痒地狱，抵达终点！`,
       sub: `奖励：今晚免受一切惩罚，还可以命令 ${esc(settings.master)} 做一件事（合理范围内）！`,
     }) + `</div>`,
     [{ text: "🔄 再来一局", value: 1 }]
@@ -1038,30 +1315,37 @@ async function doWin() {
 /* ---------------- 图鉴 ---------------- */
 const DEX_CELLS = [
   ["start", "起点 / 层起点", "每层的出发格，安全无事件。"],
-  ["punish", "惩罚格", "自动抽取工具轮盘和时长轮盘，被挠指定部位。中途撑不住喊停 = 加时3分钟，休息后继续。层数越高，残忍工具概率越大、时长越长（最长30分钟）。"],
-  ["challenge", "挑战格", "完成挑战安全通过；失败则触发加倍惩罚（工具至少「残忍」级、时长×1.5）。"],
+  ["punish", "惩罚格", "部位、工具、时长三个轮盘同时开抽，以本层固定姿势被挠。中途撑不住喊停 = 加时3分钟，休息后继续。层数越高，残忍工具概率越大、时长越长（最长30分钟）。"],
+  ["challenge", "挑战格", "同样三连抽后进行挑战。成功安全通过；失败默认触发加倍惩罚（工具至少「残忍」级、时长×1.5），奖惩均可在开局前自定义。"],
   ["interrogate", "拷问格", "如实招供/照做即可过关；选择硬挺则接受挠痒拷问，扛过全程也算赢。"],
+  ["minigame", "游戏格", "猜数字 / 24点 / 脚心写字猜字。赢了继续飞行棋，输了接受三连抽惩罚。"],
+  ["massager", "按摩仪格", "「固定」：把按摩仪绑上脚心一直嗡嗡作响；「取下」：解脱！只有脚上有按摩仪时取下格才有效。（需在开局前勾选道具）"],
   ["sock", "袜子格", "脱袜子/穿袜子等小事件，影响接下来脚部的「防御力」。"],
   ["reward", "奖励格", "休息、吃喝、前进2格、免罚护体卡等好事，越往后越稀少。"],
-  ["reverse", "反杀格", "极其稀有！被惩罚者反客为主，甩骰子决定次数（1~3次），反过来抽轮盘挠协助者。"],
-  ["portal", "传送门", "仅地狱层出现。踩中直接摔回第二层的同一位置……"],
-  ["stairs", "层间入口", "位于棋盘中心。碰到就自动进入下一层（不会走过头），奖励休息2分钟。"],
-  ["goal", "终点", "必须正好踩中，走过头原地不动。通关奖励：今晚免受一切惩罚 + 命令对方做一件事。"],
+  ["reverse", "反杀格", "第二层起才会出现！被惩罚者反客为主，甩骰子决定次数（1~3次），反过来挠协助者。"],
+  ["portal", "传送门", "仅最后一层出现。踩中直接摔回上一层的同一位置……"],
+  ["stairs", "层间入口", "位于棋盘中心。碰到就自动进入下一层（不会走过头），并抽取新一层的固定姿势。"],
+  ["goal", "终点", "只在最后一层出现，必须正好踩中，走过头原地不动。通关奖励：今晚免受一切惩罚 + 命令对方一件事。"],
 ];
 
 function dexReplace(s) {
-  return esc(s).replaceAll("{tool}", "〔轮盘工具〕").replaceAll("{dur}", "〔轮盘时长〕");
+  return esc(s)
+    .replaceAll("{tool}", "〔轮盘工具〕")
+    .replaceAll("{part}", "〔轮盘部位〕")
+    .replaceAll("{dur}", "〔轮盘时长〕");
 }
 
 async function showDex() {
   const cellRows = DEX_CELLS.map(([type, name, desc]) =>
     `<div class="dex-item dex-cell"><span class="dex-ico">${CELL_META[type].icon}</span><span><b>${name}</b>：${desc}</span></div>`
   ).join("");
-  const punishRows = PUNISH_TEMPLATES.map((t) =>
-    `<div class="dex-item"><b>${esc(t.pos)}</b> → 挠<b>${esc(t.part)}</b></div>`
-  ).join("");
+  const postureRows = `<div class="dex-item">${settings.postures.map(esc).join(" ｜ ")}</div>`;
+  const partRows = `<div class="dex-item">${BODY_PARTS.map(esc).join(" ｜ ")}</div>`;
   const chalRows = CHALLENGES.map((c) =>
     `<div class="dex-item"><b>${esc(c.name)}</b>：${dexReplace(c.desc)}</div>`
+  ).join("");
+  const gameRows = MINIGAMES.map((g) =>
+    `<div class="dex-item"><b>${esc(g.name)}</b>：${dexReplace(g.desc).replaceAll("{master}", "协助者").replaceAll("{victim}", "被惩罚者")}</div>`
   ).join("");
   const interRows = INTERROGATIONS.map((t) => `<div class="dex-item">${esc(t)}</div>`).join("");
   const sockRows = SOCK_EVENTS.map((t) => `<div class="dex-item">${esc(t)}</div>`).join("");
@@ -1071,15 +1355,15 @@ async function showDex() {
     `<div class="modal-icon">📖</div><h2>格子图鉴</h2>` +
     `<div class="dex">` +
     `<h3>🗺️ 格子总览</h3>${cellRows}` +
-    `<h3>🕷️ 惩罚姿势库（工具、时长由轮盘决定）</h3>${punishRows}` +
+    `<h3>🧘 姿势库（每层抽一次，整层保持）</h3>${postureRows}` +
+    `<h3>🎯 部位库（每次惩罚/挑战抽取）</h3>${partRows}` +
     `<h3>⚔️ 挑战库</h3>${chalRows}` +
+    `<h3>🎯 游戏格玩法</h3>${gameRows}` +
     `<h3>🎤 拷问库</h3>${interRows}` +
     `<h3>🧦 袜子事件</h3>${sockRows}` +
     `<h3>🎁 奖励库</h3>${rewardRows}` +
-    `<h3>📈 层数规则</h3>` +
-    `<div class="dex-item">1F 温柔层：温和工具概率高，时长 1~5 分钟。</div>` +
-    `<div class="dex-item">2F 残忍层：残忍工具概率上升，时长 3~12 分钟。</div>` +
-    `<div class="dex-item">3F 地狱层：极刑工具概率最高，时长 5~30 分钟，还有传送门陷阱。</div>` +
+    `<h3>📈 难度规则</h3>` +
+    `<div class="dex-item">层数可选 3~7 层，难度分三档随层数递进：温柔档时长 1~5 分钟；残忍档 3~12 分钟；地狱档 5~30 分钟且极刑工具概率最高。「手指」出现概率被调高，「羽毛」略微调低。</div>` +
     `</div>`,
     [{ text: "关闭图鉴", value: 1 }]
   );
@@ -1110,7 +1394,7 @@ async function rollDice() {
 }
 
 /**
- * 逐格移动。碰到层间入口（17/35 格）时自动拐进中心进入下一层，
+ * 逐格移动。碰到层间入口时自动拐进中心进入下一层，
  * 丢弃剩余步数。返回 true 表示本次移动触发了进层。
  */
 async function moveSteps(steps) {
@@ -1120,7 +1404,7 @@ async function moveSteps(steps) {
     positionToken(true);
     await sleep(330);
 
-    if (state.pos === 17 || state.pos === 35) {
+    if (state.pos % LAYER_SIZE === 17 && state.pos !== GOAL) {
       await enterNextLayer();
       return true;
     }
@@ -1135,47 +1419,53 @@ async function moveSteps(steps) {
   return false;
 }
 
-/** 从中心入口进入下一层 */
+/** 从中心入口进入下一层：生成新层内容 + 抽取新层姿势 */
 async function enterNextLayer() {
   const nextLayer = layerOf(state.pos) + 1;
   AudioFX.magic();
   await sleep(500);
   await showAutoModal(
     cardHTML({
-      icon: "🪜", title: `进入 ${LAYER_NAMES[nextLayer]}！`,
+      icon: "🪜", title: `进入 ${layerName(nextLayer)}！`,
       desc: "拐进棋盘中心，自动登上下一层！<br>奖励：原地休息 2 分钟再继续。",
-      sub: nextLayer === 2
-        ? "前方是地狱层，工具更残忍、时间更长，做好觉悟……"
-        : "下一层的惩罚会明显加重哦。",
+      sub: tierOf(nextLayer) === 2
+        ? "这里是地狱档，工具更残忍、时间更长，做好觉悟……"
+        : "接下来的惩罚会逐渐加重哦。",
     }),
     2600
   );
+  buildLayerContent(nextLayer);
   state.pos++; // 跳到下一层的层起点
-  addLog(`🪜 到达入口，自动进入${LAYER_NAMES[nextLayer]}！`, true);
+  addLog(`🪜 到达入口，自动进入${layerName(nextLayer)}！`, true);
   renderBoard(nextLayer);
   AudioFX.ding();
   await sleep(400);
+  await drawPosture(nextLayer);
 }
 
 /** 处理棋子当前所在格子的事件 */
 async function dispatchCell() {
   const cell = board[state.pos];
-  const layer = layerOf(state.pos);
+  const tier = tierOf(layerOf(state.pos));
 
   if (cell.type === "goal") {
     await doWin();
   } else if (cell.type === "punish") {
-    await handlePunish(cell, layer);
+    await handlePunish(cell, tier);
   } else if (cell.type === "challenge") {
-    await handleChallenge(cell, layer);
+    await handleChallenge(cell, tier);
   } else if (cell.type === "interrogate") {
-    await handleInterrogate(cell, layer);
+    await handleInterrogate(cell, tier);
+  } else if (cell.type === "minigame") {
+    await handleMinigame(cell, tier);
+  } else if (cell.type === "massager") {
+    await handleMassager(cell);
   } else if (cell.type === "sock") {
     await handleSock(cell);
   } else if (cell.type === "reward") {
     await handleReward(cell);
   } else if (cell.type === "reverse") {
-    await handleReverse(cell, layer);
+    await handleReverse(cell, tier);
   } else if (cell.type === "portal") {
     await handlePortal();
   }
@@ -1192,8 +1482,8 @@ async function onRoll() {
   addLog(`🎲 掷出了 ${n} 点`);
 
   const remaining = GOAL - state.pos;
-  if (state.pos >= 36 && n > remaining) {
-    // 只有终点必须正好踩中（前两层碰到入口会自动进入，不存在走过头）
+  if (layerOf(state.pos) === state.layers - 1 && n > remaining) {
+    // 只有终点必须正好踩中（其余层碰到入口会自动进入，不存在走过头）
     AudioFX.fail();
     $("#roll-hint").textContent = `😵 走过头了！距终点只剩 ${remaining} 格，原地不动。`;
     addLog(`😵 掷出 ${n} 点但只差 ${remaining} 格，走过头无效！`, true);
@@ -1205,7 +1495,9 @@ async function onRoll() {
 
     const left = GOAL - state.pos;
     if (!state.over && left > 0) {
-      $("#roll-hint").textContent = `距离终点还有 ${left} 格${state.shield ? "（🛡️护体中）" : ""}`;
+      $("#roll-hint").textContent =
+        `距离终点还有 ${left} 格` +
+        `${state.shield ? "（🛡️护体中）" : ""}${state.massagerOn ? "（📳按摩仪工作中）" : ""}`;
     }
   }
 
@@ -1253,33 +1545,52 @@ function launchConfetti() {
 }
 
 /* ---------------- 初始化 & 事件绑定 ---------------- */
-function startGame() {
+async function startGame() {
   const victim = $("#input-victim").value.trim();
   const master = $("#input-master").value.trim();
   if (victim) settings.victim = victim;
   if (master) settings.master = master;
   const ultimate = $("#input-ultimate").value.trim();
   settings.ultimate = ultimate || DEFAULT_ULTIMATE;
+  settings.layers = Number($("#input-layers").value) || 3;
+  settings.massager = $("#input-massager").checked;
+  settings.chalReward = $("#input-chal-reward").value.trim();
+  settings.chalFail = $("#input-chal-fail").value.trim();
   if (!settings.tools.length) {
-    settings.tools = DEFAULT_TOOLS.slice();
+    settings.tools = DEFAULT_TOOLS.map((t) => ({ ...t }));
     renderToolList();
+  }
+  if (!settings.postures.length) {
+    settings.postures = DEFAULT_POSTURES.slice();
+    renderPostureList();
   }
   saveSettings();
 
-  buildBoard();
+  state.layers = settings.layers;
   state.pos = 0;
-  state.busy = false;
+  state.busy = true;
   state.over = false;
   state.shield = false;
+  state.massagerOn = false;
+  state.posture = "";
+
+  buildBoard();
+  renderTabs();
 
   $("#screen-setup").classList.remove("active");
   $("#screen-game").classList.add("active");
   renderBoard(0);
   setDiceFace(1);
-  addLog(`🚩 冒险开始！${settings.victim} 踏上了挠痒地狱之旅……祝好运（不）。`, true);
+  addLog(`🚩 冒险开始！${settings.victim} 踏上了 ${state.layers} 层挠痒地狱之旅……祝好运（不）。`, true);
   $("#roll-hint").textContent = `距离终点还有 ${GOAL} 格`;
   AudioFX.ensure();
   AudioFX.magic();
+
+  // 开局先抽第一层姿势
+  await sleep(600);
+  await drawPosture(0);
+  state.busy = false;
+  $("#btn-roll").disabled = false;
 }
 
 function initBgDecor() {
@@ -1302,14 +1613,18 @@ function init() {
   $("#input-victim").value = settings.victim === "宝贝" ? "" : settings.victim;
   $("#input-master").value = settings.master === "主人" ? "" : settings.master;
   $("#input-ultimate").value = settings.ultimate;
+  $("#input-layers").value = settings.layers;
+  $("#layers-value").textContent = `${settings.layers} 层`;
+  $("#input-massager").checked = settings.massager;
+  $("#input-chal-reward").value = settings.chalReward || "";
+  $("#input-chal-fail").value = settings.chalFail || "";
   renderToolList();
+  renderPostureList();
 
-  $("#btn-dex").onclick = () => { AudioFX.tick(); showDex(); };
-  $("#btn-dex-game").onclick = () => {
-    if (state.busy || overlay.classList.contains("active")) return;
+  $("#input-layers").addEventListener("input", () => {
+    $("#layers-value").textContent = `${$("#input-layers").value} 层`;
     AudioFX.tick();
-    showDex();
-  };
+  });
 
   $("#btn-add-tool").onclick = () => {
     const name = $("#input-tool-name").value.trim();
@@ -1325,6 +1640,27 @@ function init() {
   $("#input-tool-name").addEventListener("keydown", (e) => {
     if (e.key === "Enter") $("#btn-add-tool").click();
   });
+
+  $("#btn-add-posture").onclick = () => {
+    const name = $("#input-posture-name").value.trim();
+    if (!name) return;
+    if (settings.postures.includes(name)) return;
+    settings.postures.push(name);
+    $("#input-posture-name").value = "";
+    saveSettings();
+    renderPostureList();
+    AudioFX.tick();
+  };
+  $("#input-posture-name").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") $("#btn-add-posture").click();
+  });
+
+  $("#btn-dex").onclick = () => { AudioFX.tick(); showDex(); };
+  $("#btn-dex-game").onclick = () => {
+    if (state.busy || overlay.classList.contains("active")) return;
+    AudioFX.tick();
+    showDex();
+  };
 
   $("#btn-start").onclick = startGame;
   $("#btn-roll").onclick = onRoll;
