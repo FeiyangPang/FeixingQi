@@ -226,6 +226,7 @@ function defaultSettings() {
     master: "主人",
     tools: DEFAULT_TOOLS.map((t) => ({ ...t })),
     postures: DEFAULT_POSTURES.slice(),
+    uniquePosture: true,
     massager: true,
     spank: false,
     rev: SETTINGS_REV,
@@ -282,7 +283,8 @@ function loadSettings() {
   if (!Array.isArray(settings.interrogations)) settings.interrogations = DEFAULT_INTERROGATIONS.slice();
   if (!Array.isArray(settings.rewards)) settings.rewards = DEFAULT_REWARDS.map((r) => ({ ...r }));
   if (typeof settings.winReward !== "string") settings.winReward = "";
-  settings.layers = Math.min(7, Math.max(3, Number(settings.layers) || 3));
+  if (typeof settings.uniquePosture !== "boolean") settings.uniquePosture = true;
+  settings.layers = Math.min(maxLayersAllowed(), Math.max(MIN_LAYERS, Number(settings.layers) || MIN_LAYERS));
 
   // 老存档迁移：移除吃东西奖励，补上重抽卡
   if (savedRev < 3) {
@@ -295,6 +297,51 @@ function loadSettings() {
 
 function saveSettings() {
   try { localStorage.setItem(LS_KEY, JSON.stringify(settings)); } catch (e) {}
+}
+
+/* ---------------- 层数 / 姿势数量的相互约束 ---------------- */
+const MIN_LAYERS = 3;
+const MAX_LAYERS = 7;
+
+/** 勾选「每层姿势不重复」时，层数不能超过姿势数量 */
+function maxLayersAllowed() {
+  if (!settings.uniquePosture) return MAX_LAYERS;
+  return Math.max(MIN_LAYERS, Math.min(MAX_LAYERS, settings.postures.length));
+}
+
+/** 姿势最少保留几个：不重复模式下不能少于层数，否则至少留 1 个 */
+function minPosturesAllowed() {
+  return settings.uniquePosture ? Math.max(MIN_LAYERS, settings.layers) : 1;
+}
+
+/** 把约束同步到滑条上限、当前层数和两处说明文字 */
+function refreshLimits() {
+  const slider = $("#input-layers");
+  const max = maxLayersAllowed();
+  slider.max = max;
+  settings.layers = Math.min(max, Math.max(MIN_LAYERS, Number(slider.value) || MIN_LAYERS));
+  slider.value = settings.layers;
+  $("#layers-value").textContent = `${settings.layers} 层`;
+
+  const layersNote = $("#layers-note");
+  if (settings.uniquePosture) {
+    layersNote.textContent =
+      `已勾选「每层姿势不重复」：层数上限 = 姿势数量（当前 ${settings.postures.length} 个），` +
+      `范围 ${MIN_LAYERS}~${max} 层。想要更多层就先添加姿势，或取消勾选。`;
+    layersNote.className = "field-note warn";
+  } else {
+    layersNote.textContent = `范围 ${MIN_LAYERS}~${MAX_LAYERS} 层。未勾选姿势不重复，姿势可以重复出现。`;
+    layersNote.className = "field-note";
+  }
+
+  const postureNote = $("#posture-note");
+  if (settings.uniquePosture) {
+    postureNote.textContent =
+      `不重复模式下姿势数量不能少于层数：当前 ${settings.postures.length} 个 / 至少 ${minPosturesAllowed()} 个。`;
+  } else {
+    postureNote.textContent = `未勾选时姿势会重复出现，至少保留 1 个即可（当前 ${settings.postures.length} 个）。`;
+  }
+  postureNote.className = "field-note";
 }
 
 function renderToolList() {
@@ -327,10 +374,29 @@ function renderPostureList() {
     const del = document.createElement("button");
     del.textContent = "✕";
     del.title = "删除";
-    del.onclick = () => {
+    del.onclick = async () => {
+      const min = minPosturesAllowed();
+      if (settings.postures.length <= min) {
+        AudioFX.fail();
+        await showModal(
+          cardHTML({
+            icon: "🚫", title: "不能再删了",
+            desc: settings.uniquePosture
+              ? `已勾选「每层姿势不重复」，姿势数量不能少于层数。<br>当前 ${settings.postures.length} 个姿势 / ${settings.layers} 层。`
+              : "至少要保留 1 个姿势。",
+            sub: settings.uniquePosture
+              ? "想继续删除，请先取消勾选「每层姿势不重复」，或把层数调小。"
+              : "",
+          }),
+          [{ text: "知道了", value: 1 }]
+        );
+        return;
+      }
       settings.postures.splice(i, 1);
       saveSettings();
       renderPostureList();
+      refreshLimits();
+      saveSettings();
     };
     chip.appendChild(del);
     wrap.appendChild(chip);
@@ -448,6 +514,7 @@ const state = {
   layers: 3,
   massagerOn: false,
   posture: "",
+  posturePool: [],
 };
 
 /* ---------------- 棋盘渲染 ---------------- */
@@ -868,14 +935,30 @@ async function offerReroll(verdictHtml, goText) {
   return showModal(verdictHtml, buttons);
 }
 
-/** 每层开始时抽取本层固定姿势 */
+/** 每层开始时抽取本层固定姿势。不重复模式下抽过的姿势会从轮盘上消失 */
 async function drawPosture(layer) {
   if (!settings.postures.length) { state.posture = "自由姿势"; return; }
-  const items = settings.postures.map((p) => ({ label: p, value: p, weight: 1 }));
+
+  if (!settings.uniquePosture) {
+    state.posturePool = settings.postures.slice();
+  } else if (!state.posturePool.length) {
+    // 传送门等额外抽取可能提前抽空池子，重新装填时尽量避开当前姿势
+    state.posturePool = settings.postures.filter((p) => p !== state.posture);
+    if (!state.posturePool.length) state.posturePool = settings.postures.slice();
+  }
+
+  const items = state.posturePool.map((p) => ({ label: p, value: p, weight: 1 }));
   const it = await spinWheel(`🧘 抽取第 ${layer + 1} 层固定姿势`, items);
   state.posture = it.value;
+  if (settings.uniquePosture) {
+    const idx = state.posturePool.indexOf(it.value);
+    if (idx >= 0) state.posturePool.splice(idx, 1);
+  }
   $("#posture-badge").textContent = `🧘 ${it.value}`;
-  addLog(`🧘 第 ${layer + 1} 层姿势：${it.value}（整层保持）`, true);
+  addLog(
+    `🧘 第 ${layer + 1} 层姿势：${it.value}（整层保持${settings.uniquePosture ? "，之后不再出现" : ""}）`,
+    true
+  );
 }
 
 /* ---------------- 计时器 ---------------- */
@@ -1617,7 +1700,11 @@ function buildDexHtml() {
   const cellRows = DEX_CELLS.map(([type, name, desc]) =>
     `<div class="dex-item dex-cell"><span class="dex-ico">${CELL_META[type].icon}</span><span><b>${name}</b>：${desc}</span></div>`
   ).join("");
-  const postureRows = `<div class="dex-item">${settings.postures.map(esc).join(" ｜ ") || "（空）"}</div>`;
+  const postureRows =
+    `<div class="dex-item">${settings.postures.map(esc).join(" ｜ ") || "（空）"}</div>` +
+    `<div class="dex-item">${settings.uniquePosture
+      ? `🚫 已开启<b>每层姿势不重复</b>：抽过的姿势会从轮盘上消失，因此层数上限 = 姿势数量（当前 ${settings.postures.length} 个）。`
+      : "🔁 未开启每层姿势不重复：同一个姿势可能在多层重复出现。"}</div>`;
   const partRows = `<div class="dex-item">${BODY_PARTS.map(esc).join(" ｜ ")}</div>`;
 
   const chalRows = settings.challenges.length
@@ -1932,7 +2019,9 @@ async function startGame() {
   if (master) settings.master = master;
   const ultimate = $("#input-ultimate").value.trim();
   settings.ultimate = ultimate || DEFAULT_ULTIMATE;
-  settings.layers = Number($("#input-layers").value) || 3;
+  settings.uniquePosture = $("#input-unique-posture").checked;
+  settings.layers = Number($("#input-layers").value) || MIN_LAYERS;
+  settings.layers = Math.min(maxLayersAllowed(), Math.max(MIN_LAYERS, settings.layers));
   settings.massager = $("#input-massager").checked;
   settings.spank = $("#input-spank").checked;
   settings.chalReward = $("#input-chal-reward").value.trim();
@@ -1947,6 +2036,8 @@ async function startGame() {
     renderPostureList();
   }
   saveSettings();
+
+  state.posturePool = settings.postures.slice();
 
   state.layers = settings.layers;
   state.pos = 0;
@@ -2000,14 +2091,41 @@ function init() {
   $("#layers-value").textContent = `${settings.layers} 层`;
   $("#input-massager").checked = settings.massager;
   $("#input-spank").checked = !!settings.spank;
+  $("#input-unique-posture").checked = !!settings.uniquePosture;
   $("#input-chal-reward").value = settings.chalReward || "";
   $("#input-chal-fail").value = settings.chalFail || "";
   $("#input-win-reward").value = settings.winReward || "";
   renderToolList();
   renderPostureList();
+  refreshLimits();
 
   $("#input-layers").addEventListener("input", () => {
-    $("#layers-value").textContent = `${$("#input-layers").value} 层`;
+    settings.layers = Number($("#input-layers").value) || MIN_LAYERS;
+    $("#layers-value").textContent = `${settings.layers} 层`;
+    refreshLimits();
+    saveSettings();
+    AudioFX.tick();
+  });
+
+  $("#input-unique-posture").addEventListener("change", async () => {
+    const box = $("#input-unique-posture");
+    if (box.checked && settings.postures.length < MIN_LAYERS) {
+      // 姿势太少，连最低的 3 层都排不满
+      box.checked = false;
+      AudioFX.fail();
+      await showModal(
+        cardHTML({
+          icon: "🚫", title: "姿势不够",
+          desc: `「每层姿势不重复」至少需要 ${MIN_LAYERS} 个姿势（最低 ${MIN_LAYERS} 层），当前只有 ${settings.postures.length} 个。`,
+          sub: "先添加几个姿势，再来勾选吧。",
+        }),
+        [{ text: "知道了", value: 1 }]
+      );
+      return;
+    }
+    settings.uniquePosture = box.checked;
+    refreshLimits();   // 勾选后层数会自动收进姿势数量以内
+    saveSettings();
     AudioFX.tick();
   });
 
@@ -2032,8 +2150,9 @@ function init() {
     if (settings.postures.includes(name)) return;
     settings.postures.push(name);
     $("#input-posture-name").value = "";
-    saveSettings();
     renderPostureList();
+    refreshLimits();   // 姿势变多后层数上限也跟着放开
+    saveSettings();
     AudioFX.tick();
   };
   $("#input-posture-name").addEventListener("keydown", (e) => {

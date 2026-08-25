@@ -58,6 +58,11 @@
         <input type="text" id="input-posture-name" placeholder="新姿势名称" maxlength="12">
         <button id="btn-add-posture" class="btn btn-small">添加</button>
       </div>
+      <label class="check-row">
+        <input type="checkbox" id="input-unique-posture" checked>
+        🚫 每层姿势不重复（抽过的姿势从轮盘上消失）
+      </label>
+      <p id="posture-note" class="field-note"></p>
     </div>
 
     <div class="setup-section">
@@ -66,6 +71,7 @@
         <input type="range" id="input-layers" min="3" max="7" step="1" value="3">
         <span id="layers-value" class="slider-value">3 层</span>
       </div>
+      <p id="layers-note" class="field-note"></p>
     </div>
 
     <div class="setup-section">
@@ -94,7 +100,7 @@
       <h2>📜 规则速览</h2>
       <ul>
         <li>只有一个棋子，由<b>被惩罚者</b>甩骰子，顺时针绕棋盘走，走到哪个格子就接受哪个格子的内容。每局格子布局随机打乱。</li>
-        <li>🧘 每进入一层（含第一层）自动抽取本层<b>固定姿势</b>，整层保持该姿势。</li>
+        <li>🧘 每进入一层（含第一层）自动抽取本层<b>固定姿势</b>，整层保持该姿势。默认开启<b>每层姿势不重复</b>（抽过的姿势从轮盘消失），此时层数上限 = 姿势数量。</li>
         <li>🕷️ <b>惩罚格</b>：<b>部位、工具、时长</b>三个轮盘同时开抽！倒计时开始挠，中途撑不住喊停 = 加时 3 分钟，休息后继续。</li>
         <li>👋 <b>打脚心</b>（需勾选启用）：抽中这个工具则忽略部位，直接打脚心，下数 = 时长分钟数 × 2。</li>
         <li>🎲 <b>重抽卡</b>（奖励格获得）：判决出来后可以用掉一张，把工具、部位、时长整套重抽。</li>

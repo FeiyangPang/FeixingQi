@@ -148,6 +148,11 @@ body {
   width: 17px; height: 17px; accent-color: var(--pink); cursor: pointer;
 }
 
+.field-note {
+  font-size: 12px; color: var(--text-dim); line-height: 1.6; margin-top: 8px;
+}
+.field-note.warn { color: var(--gold); }
+
 .slider-row { display: flex; align-items: center; gap: 16px; }
 .slider-row input[type="range"] {
   flex: 1; accent-color: var(--pink); cursor: pointer; height: 6px;
