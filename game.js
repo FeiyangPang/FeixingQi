@@ -214,6 +214,7 @@ function defaultSettings() {
     tools: DEFAULT_TOOLS.map((t) => ({ ...t })),
     postures: DEFAULT_POSTURES.slice(),
     massager: true,
+    spank: false,
     layers: 3,
     ultimate: DEFAULT_ULTIMATE,
     chalReward: "",
@@ -261,6 +262,7 @@ function loadSettings() {
   if (!Array.isArray(settings.interrogations)) settings.interrogations = DEFAULT_INTERROGATIONS.slice();
   if (!Array.isArray(settings.rewards)) settings.rewards = DEFAULT_REWARDS.map((r) => ({ ...r }));
   if (typeof settings.winReward !== "string") settings.winReward = "";
+  if (typeof settings.spank !== "boolean") settings.spank = false;
   settings.layers = Math.min(7, Math.max(3, Number(settings.layers) || 3));
 }
 
@@ -744,9 +746,29 @@ function spinWheelsMulti(title, defs) {
   });
 }
 
+const SPANK_TOOL = { name: "打脚心", cruelty: 2, spank: true };
+
+function isSpankTool(tool) {
+  return !!(tool && (tool.spank || tool.name === "打脚心"));
+}
+
+function applySpank(drawn) {
+  if (!isSpankTool(drawn.tool)) return { ...drawn, spank: false, hits: 0 };
+  return {
+    ...drawn,
+    spank: true,
+    part: "脚心",
+    hits: Math.max(1, Math.round(Number(drawn.minutes) * 2)),
+  };
+}
+
 function toolItems(tier, minCruelty = 1) {
-  let pool = settings.tools.filter((t) => t.cruelty >= minCruelty);
-  if (!pool.length) pool = settings.tools.slice();
+  let pool = settings.tools.filter((t) => t.cruelty >= minCruelty && !isSpankTool(t));
+  if (settings.spank && SPANK_TOOL.cruelty >= minCruelty) {
+    pool = pool.concat(SPANK_TOOL);
+  }
+  if (!pool.length) pool = settings.tools.filter((t) => !isSpankTool(t)).slice();
+  if (!pool.length && settings.spank) pool = [SPANK_TOOL];
   return pool.map((t) => ({
     label: `${CRUELTY_ICON[t.cruelty]}${t.name}`,
     value: t,
@@ -762,18 +784,18 @@ function partItems() {
   return BODY_PARTS.map((p) => ({ label: p, value: p, weight: 1 }));
 }
 
-/** 部位 + 工具 + 时长 三轮盘同抽 */
+/** 部位 + 工具 + 时长 三轮盘同抽。抽中打脚心时忽略部位，次数 = 分钟 × 2 */
 async function spinTriple(tier, { minCruelty = 1, durMult = 1 } = {}) {
   const [part, tool, dur] = await spinWheelsMulti("🎡 命运三连抽", [
     { name: "🎯 部位", items: partItems() },
     { name: "🧤 工具", items: toolItems(tier, minCruelty) },
     { name: "⏱️ 时长", items: durationItems(tier) },
   ]);
-  return {
+  return applySpank({
     part: part.value,
     tool: tool.value,
     minutes: Math.min(30, dur.value * durMult),
-  };
+  });
 }
 
 /** 每层开始时抽取本层固定姿势 */
@@ -932,6 +954,130 @@ function runTimer(opts) {
   });
 }
 
+/** 打脚心计数器：每点一下记一记，打满即结束 */
+function runHits(opts) {
+  return new Promise((resolve) => {
+    const initialHits = Math.max(1, Math.round(opts.hits));
+    let doneHits = 0;
+    let total = initialHits;
+    let failCount = 0;
+
+    function stop(result) {
+      closeModal();
+      resolve({ result, failCount });
+    }
+
+    async function confirmSurrender() {
+      const sure = await showModal(
+        cardHTML({
+          icon: "⚠️", title: "确定认输？",
+          desc: "认输将直接触发终极惩罚，没有回头路！",
+          sub: "终极惩罚的内容是保密的，认输之后才会揭晓……",
+        }),
+        [
+          { text: "我再坚持一下", cls: "btn-success", value: false },
+          { text: "🏳️ 我认输……", cls: "btn-danger", value: true },
+        ]
+      );
+      if (sure) { resolve({ result: "surrender", failCount }); return; }
+      buildUI();
+    }
+
+    function buildUI() {
+      modalEl.innerHTML =
+        `<div class="modal-icon">🦶</div>` +
+        `<h2>${opts.title}</h2>` +
+        `<p class="modal-desc">${opts.desc}</p>` +
+        `<div class="timer-display" id="hit-display"></div>` +
+        `<p class="hit-remain" id="hit-remain"></p>` +
+        `<div class="timer-bar-wrap"><div class="timer-bar" id="timer-bar"></div></div>` +
+        `<p class="timer-status" id="timer-status">每打一下，点一下「打了一下」</p>` +
+        `<div class="modal-buttons" id="timer-buttons"></div>`;
+      overlay.classList.add("active");
+
+      const display = $("#hit-display");
+      const remain = $("#hit-remain");
+      const bar = $("#timer-bar");
+      const status = $("#timer-status");
+      const btns = $("#timer-buttons");
+
+      function render() {
+        display.textContent = `${doneHits} / ${total}`;
+        remain.textContent = `还剩 ${Math.max(0, total - doneHits)} 下`;
+        bar.style.width = Math.min(100, (doneHits / total) * 100) + "%";
+      }
+
+      const hitBtn = document.createElement("button");
+      hitBtn.className = "btn btn-danger btn-big";
+      hitBtn.textContent = "🦶 打了一下";
+      hitBtn.onclick = () => {
+        doneHits++;
+        AudioFX.diceLand();
+        document.body.classList.add("shake");
+        setTimeout(() => document.body.classList.remove("shake"), 280);
+        if (doneHits >= total) {
+          AudioFX.success();
+          stop("done");
+          return;
+        }
+        render();
+      };
+      btns.appendChild(hitBtn);
+
+      if (opts.failAddsHits) {
+        const failBtn = document.createElement("button");
+        failBtn.className = "btn btn-warn";
+        failBtn.textContent = `😫 撑不住了（+${opts.failAddsHits}下）`;
+        failBtn.onclick = () => {
+          failCount++;
+          total += opts.failAddsHits;
+          status.textContent = `加了 ${opts.failAddsHits} 下，继续打！`;
+          AudioFX.fail();
+          render();
+        };
+        btns.appendChild(failBtn);
+      }
+
+      if (opts.canEarlyFinish) {
+        const earlyBtn = document.createElement("button");
+        earlyBtn.className = "btn btn-success";
+        earlyBtn.textContent = "✅ 提前完成";
+        earlyBtn.onclick = () => { AudioFX.ding(); stop("early"); };
+        btns.appendChild(earlyBtn);
+      }
+
+      const giveUpBtn = document.createElement("button");
+      giveUpBtn.className = "btn btn-danger";
+      giveUpBtn.textContent = "🏳️ 认输";
+      giveUpBtn.onclick = confirmSurrender;
+      btns.appendChild(giveUpBtn);
+
+      const mini = document.createElement("div");
+      mini.className = "timer-mini-row";
+      const skipBtn = document.createElement("button");
+      skipBtn.className = "btn-mini";
+      skipBtn.textContent = "⏭ 跳过读秒";
+      skipBtn.onclick = () => { AudioFX.ding(); stop("done"); };
+      mini.appendChild(skipBtn);
+      const resetBtn = document.createElement("button");
+      resetBtn.className = "btn-mini";
+      resetBtn.textContent = "🔄 重新计数";
+      resetBtn.onclick = () => {
+        doneHits = 0;
+        total = initialHits;
+        failCount = 0;
+        AudioFX.tick();
+        buildUI();
+      };
+      mini.appendChild(resetBtn);
+      modalEl.appendChild(mini);
+      render();
+    }
+
+    buildUI();
+  });
+}
+
 /* ---------------- 各类格子流程 ---------------- */
 const TAGS = {
   punish: ["🕷️ 惩罚格", "tag-punish"],
@@ -960,7 +1106,41 @@ async function punishFlow({ tier, minCruelty = 1, durMult = 1, prefix = "", vict
     2000
   );
 
-  const { part, tool, minutes } = await spinTriple(tier, { minCruelty, durMult });
+  const drawn = await spinTriple(tier, { minCruelty, durMult });
+  const { part, tool, minutes, spank, hits } = drawn;
+
+  if (spank) {
+    await showModal(
+      cardHTML({
+        icon: "🦶", tag: TAGS.punish[0], tagCls: TAGS.punish[1],
+        title: "最终判决 · 打脚心！",
+        desc: (withPosture ? `${esc(victim)} 以【<b>${esc(state.posture)}</b>】固定，<br>` : `${esc(victim)} `) +
+          `部位轮盘作废！被 ${esc(master)} <b>打脚心</b> 共 <b>${hits}</b> 下！`,
+        sub: `次数规则：时长 ${fmtMin(minutes)} × 2 = ${hits} 下。打一下点一下计数。` +
+          (state.massagerOn && withPosture ? "<br>📳 脚心上的按摩仪仍在嗡嗡工作中……" : ""),
+      }),
+      [{ text: "🦶 开始打脚心", cls: "btn-danger", value: 1 }]
+    );
+
+    const { result, failCount } = await runHits({
+      title: "打脚心进行中",
+      desc: `目标 ${hits} 下（由 ${fmtMin(minutes)} × 2 算出）`,
+      hits,
+      failAddsHits: 2,
+    });
+    if (result === "surrender") { await doSurrender(); return "surrender"; }
+    await showModal(
+      cardHTML({
+        icon: "🎉", title: "打完了！",
+        desc: failCount > 0
+          ? `中途加了 ${failCount} 次下数，${esc(victim)} 还是挨完了 ${hits} 下起的全部！`
+          : `${esc(victim)} 挨完了全部 ${hits} 下！`,
+      }),
+      [{ text: "继续冒险", value: 1 }]
+    );
+    addLog(`🦶 ${victim} 完成打脚心 ${hits} 下${failCount ? `（加罚${failCount}次）` : ""}`);
+    return "done";
+  }
 
   await showModal(
     cardHTML({
@@ -1027,28 +1207,38 @@ async function handleChallenge(cell, tier) {
     2000
   );
 
-  const { part, tool, minutes } = await spinTriple(tier, { durMult: 0.6 });
+  const drawn = await spinTriple(tier, { durMult: 0.6 });
+  const { part, tool, minutes, spank, hits } = drawn;
   const desc = cell.tpl.desc
-    .replaceAll("{tool}", `<b>${esc(tool.name)}</b>`)
+    .replaceAll("{tool}", `<b>${esc(spank ? "打脚心" : tool.name)}</b>`)
     .replaceAll("{part}", `<b>${esc(part)}</b>`)
-    .replaceAll("{dur}", `<b>${fmtMin(minutes)}</b>`);
+    .replaceAll("{dur}", spank ? `<b>打脚心 ${hits} 下</b>` : `<b>${fmtMin(minutes)}</b>`);
 
   await showModal(
     cardHTML({
-      icon: "⚔️", tag: TAGS.challenge[0], tagCls: TAGS.challenge[1],
-      title: cell.tpl.name,
+      icon: spank ? "🦶" : "⚔️", tag: TAGS.challenge[0], tagCls: TAGS.challenge[1],
+      title: spank ? `${cell.tpl.name} · 打脚心` : cell.tpl.name,
       desc,
-      sub: `姿势保持【${esc(state.posture)}】。计时结束后，由双方共同裁定挑战是否成功。`,
+      sub: spank
+        ? `姿势保持【${esc(state.posture)}】。部位轮盘作废，改为打脚心 ${hits} 下（时长 ${fmtMin(minutes)} × 2）。打完后由双方裁定挑战是否成功。`
+        : `姿势保持【${esc(state.posture)}】。计时结束后，由双方共同裁定挑战是否成功。`,
     }),
-    [{ text: "⏱️ 开始挑战", value: 1 }]
+    [{ text: spank ? "🦶 开始打脚心" : "⏱️ 开始挑战", value: 1 }]
   );
 
-  const { result } = await runTimer({
-    title: "挑战进行中",
-    desc: cell.tpl.name,
-    minutes,
-    canEarlyFinish: true,
-  });
+  const { result } = spank
+    ? await runHits({
+        title: "挑战 · 打脚心",
+        desc: cell.tpl.name,
+        hits,
+        canEarlyFinish: true,
+      })
+    : await runTimer({
+        title: "挑战进行中",
+        desc: cell.tpl.name,
+        minutes,
+        canEarlyFinish: true,
+      });
   if (result === "surrender") { await doSurrender(); return; }
 
   const success = await showModal(
@@ -1342,7 +1532,7 @@ async function doWin() {
 /* ---------------- 图鉴 ---------------- */
 const DEX_CELLS = [
   ["start", "起点 / 层起点", "每层的出发格，安全无事件。"],
-  ["punish", "惩罚格", "部位、工具、时长三个轮盘同时开抽，以本层固定姿势被挠。中途撑不住喊停 = 加时3分钟，休息后继续。层数越高，残忍工具概率越大、时长越长（最长30分钟）。"],
+  ["punish", "惩罚格", "部位、工具、时长三个轮盘同时开抽，以本层固定姿势被挠。若启用并抽中「打脚心」，则忽略部位，改为打脚心，次数 = 时长分钟 × 2。中途撑不住喊停 = 加时3分钟（打脚心则加2下），休息后继续。"],
   ["challenge", "挑战格", "同样三连抽后进行挑战。成功安全通过；失败默认触发加倍惩罚（工具至少「残忍」级、时长×1.5），奖惩均可在开局前自定义。"],
   ["interrogate", "拷问格", "如实招供/照做即可过关；选择硬挺则接受挠痒拷问，扛过全程也算赢。"],
   ["minigame", "游戏格", "猜数字 / 24点 / 脚心写字猜字。赢了继续飞行棋，输了接受三连抽惩罚。"],
@@ -1437,7 +1627,7 @@ function buildDexHtml() {
     `<button type="button" class="btn btn-small" data-add="rewards">添加</button>` +
     `</div>` +
     `<h3>📈 难度规则</h3>` +
-    `<div class="dex-item">层数可选 3~7 层，难度分三档随层数递进：温柔档时长 1~5 分钟；残忍档 3~12 分钟；地狱档 5~30 分钟且极刑工具概率最高。「手指」出现概率被调高，「羽毛」略微调低。</div>` +
+    `<div class="dex-item">层数可选 3~7 层，难度分三档随层数递进：温柔档时长 1~5 分钟；残忍档 3~12 分钟；地狱档 5~30 分钟且极刑工具概率最高。「手指」出现概率被调高，「羽毛」略微调低。若勾选「打脚心」工具并抽中：忽略部位，改为打脚心，次数 = 时长分钟 × 2。</div>` +
     `</div>`
   );
 }
@@ -1686,6 +1876,7 @@ async function startGame() {
   settings.ultimate = ultimate || DEFAULT_ULTIMATE;
   settings.layers = Number($("#input-layers").value) || 3;
   settings.massager = $("#input-massager").checked;
+  settings.spank = $("#input-spank").checked;
   settings.chalReward = $("#input-chal-reward").value.trim();
   settings.chalFail = $("#input-chal-fail").value.trim();
   settings.winReward = $("#input-win-reward").value.trim();
@@ -1749,6 +1940,7 @@ function init() {
   $("#input-layers").value = settings.layers;
   $("#layers-value").textContent = `${settings.layers} 层`;
   $("#input-massager").checked = settings.massager;
+  $("#input-spank").checked = !!settings.spank;
   $("#input-chal-reward").value = settings.chalReward || "";
   $("#input-chal-fail").value = settings.chalFail || "";
   $("#input-win-reward").value = settings.winReward || "";
