@@ -120,7 +120,7 @@ const AudioFX = {
 const LS_KEY = "tickle_ludo_settings_v2";
 const LS_KEY_V1 = "tickle_ludo_settings_v1";
 // 内容库版本：升级时对老存档做一次性内容迁移
-const SETTINGS_REV = 3;
+const SETTINGS_REV = 4;
 
 const DEFAULT_TOOLS = [
   { name: "手指", cruelty: 1 },
@@ -165,19 +165,47 @@ const DURATION_WHEELS = [
   [ { v: 5, w: 2 }, { v: 8, w: 3 }, { v: 10, w: 3 }, { v: 15, w: 2 }, { v: 20, w: 2 }, { v: 25, w: 1 }, { v: 30, w: 1 } ],
 ];
 
+/**
+ * 挑战库。desc 用于挠痒，spankDesc 用于抽中「打脚心」时的同义改写
+ * （挑战内容不变，只把挠痒换成打脚心）。{spank} = 打脚心 N 下
+ */
 const DEFAULT_CHALLENGES = [
-  { name: "忍笑挑战", desc: "被{tool}挠{part}{dur}，全程不许笑出声。可以憋、可以扭，但笑出声即失败！" },
-  { name: "木头人", desc: "保持姿势一动不动，被{tool}挠{part}{dur}。明显移动或躲闪即失败！" },
-  { name: "静音模式", desc: "被{tool}挠{part}{dur}，不许发出任何声音（笑声、叫声、求饶通通算失败）！" },
-  { name: "高举双手", desc: "双臂高高举起{dur}不许放下，期间腋窝随时会被{tool}偷袭。手放下来即失败！" },
-  { name: "脚趾倔强", desc: "被{tool}挠脚心{dur}，脚趾全程不许蜷缩。蜷了即失败！" },
-  { name: "脚趾夹夹乐", desc: "脚趾夹住一支笔（或小物件），被{tool}挠脚心{dur}。物件掉落即失败！" },
-  { name: "挠痒背诗", desc: "在被{tool}挠{part}的同时完整背出一首古诗。背错或卡壳超过5秒即失败（限时{dur}）！" },
-  { name: "口算大师", desc: "被{tool}挠{part}的同时连续答对5道两位数加减法（对方出题）。答错2次即失败（限时{dur}）！" },
-  { name: "闻袜子挑战", desc: "鼻子前放上刚脱下来的袜子，同时被{tool}挠{part}{dur}。必须乖乖闻着保持呼吸，憋气或扭头躲开即失败！" },
-  { name: "憋气大师", desc: "深吸一口气憋住，然后被{tool}狂挠{part}。每轮憋气15秒、共3轮，中途笑场漏气即失败（限时{dur}内完成）！" },
-  { name: "撒娇模式", desc: "被{tool}挠{part}{dur}，全程必须用最嗲的撒娇语气说话，语气不够嗲即失败（对方裁定）！" },
-  { name: "花式求饶", desc: "被{tool}挠{part}{dur}，必须不重样地花式求饶不许停嘴，但绝对不许说「停」字，说了即失败！" },
+  { name: "忍笑挑战",
+    desc: "被{tool}挠{part}{dur}，全程不许笑出声。可以憋、可以扭，但笑出声即失败！",
+    spankDesc: "被{spank}，全程不许笑出声。可以憋、可以扭，但笑出声即失败！" },
+  { name: "木头人",
+    desc: "保持姿势一动不动，被{tool}挠{part}{dur}。明显移动或躲闪即失败！",
+    spankDesc: "保持姿势一动不动，被{spank}。明显移动或躲闪即失败！" },
+  { name: "静音模式",
+    desc: "被{tool}挠{part}{dur}，不许发出任何声音（笑声、叫声、求饶通通算失败）！",
+    spankDesc: "被{spank}，不许发出任何声音（惨叫、求饶通通算失败）！" },
+  { name: "高举双手",
+    desc: "双臂高高举起{dur}不许放下，期间{part}随时会被{tool}偷袭。手放下来即失败！",
+    spankDesc: "双臂高高举起不许放下，全程被{spank}。手放下来即失败！" },
+  { name: "脚趾倔强",
+    desc: "被{tool}挠脚心{dur}，脚趾全程不许蜷缩。蜷了即失败！",
+    spankDesc: "被{spank}，脚趾全程不许蜷缩。蜷了即失败！" },
+  { name: "脚趾夹夹乐",
+    desc: "脚趾夹住一支笔（或小物件），被{tool}挠脚心{dur}。物件掉落即失败！",
+    spankDesc: "脚趾夹住一支笔（或小物件），被{spank}。物件掉落即失败！" },
+  { name: "挠痒背诗",
+    desc: "在被{tool}挠{part}的同时完整背出一首古诗。背错或卡壳超过5秒即失败（限时{dur}）！",
+    spankDesc: "在被{spank}的过程中完整背出一首古诗。背错或卡壳超过5秒即失败！" },
+  { name: "口算大师",
+    desc: "被{tool}挠{part}的同时连续答对5道两位数加减法（对方出题）。答错2次即失败（限时{dur}）！",
+    spankDesc: "在被{spank}的过程中连续答对5道两位数加减法（对方出题）。答错2次即失败！" },
+  { name: "闻袜子挑战",
+    desc: "鼻子前放上刚脱下来的袜子，同时被{tool}挠{part}{dur}。必须乖乖闻着保持呼吸，憋气或扭头躲开即失败！",
+    spankDesc: "鼻子前放上刚脱下来的袜子，同时被{spank}。必须乖乖闻着保持呼吸，憋气或扭头躲开即失败！" },
+  { name: "憋气大师",
+    desc: "深吸一口气憋住，然后被{tool}狂挠{part}。每轮憋气15秒、共3轮，中途笑场漏气即失败（限时{dur}内完成）！",
+    spankDesc: "深吸一口气憋住，然后被{spank}。每轮憋气15秒、共3轮，中途笑场漏气即失败！" },
+  { name: "撒娇模式",
+    desc: "被{tool}挠{part}{dur}，全程必须用最嗲的撒娇语气说话，语气不够嗲即失败（对方裁定）！",
+    spankDesc: "被{spank}，全程必须用最嗲的撒娇语气说话，语气不够嗲即失败（对方裁定）！" },
+  { name: "花式求饶",
+    desc: "被{tool}挠{part}{dur}，必须不重样地花式求饶不许停嘴，但绝对不许说「停」字，说了即失败！",
+    spankDesc: "被{spank}，必须不重样地花式求饶不许停嘴，但绝对不许说「停」字，说了即失败！" },
 ];
 
 const DEFAULT_INTERROGATIONS = [
@@ -213,7 +241,7 @@ const DEFAULT_REWARDS = [
 const DEFAULT_MINIGAMES = [
   { name: "猜数字", desc: "{master}心里想一个 1~100 的数字，{victim}最多猜 7 次，每次提示「大了/小了」。7 次内猜中即获胜！" },
   { name: "24点", desc: "{master}随机报出 4 个 1~10 的数字，{victim}在 60 秒内用加减乘除算出 24 即获胜（可心算或口述过程）！" },
-  { name: "脚心写字猜字", desc: "{master}用手指在{victim}的脚心上一笔一画写一个字，{victim}忍着痒最多猜 3 次，猜中即获胜！" },
+  { name: "脚心写字猜字", desc: "{master}用手指在{victim}的脚心上一笔一画写一个字，{victim}顶着干扰最多猜 3 次，猜中即获胜！" },
 ];
 
 const DEFAULT_ULTIMATE =
@@ -290,6 +318,19 @@ function loadSettings() {
   if (savedRev < 3) {
     settings.rewards = settings.rewards.filter((r) => !/投喂|零食|吃点/.test(r.text || ""));
     if (!settings.rewards.some((r) => r.reroll)) settings.rewards.push({ ...REROLL_REWARD });
+  }
+  // 老存档迁移：内置挑战/游戏更新文案以适配打脚心（自定义条目原样保留）
+  if (savedRev < 4) {
+    settings.challenges = settings.challenges.map((c) => {
+      const def = DEFAULT_CHALLENGES.find((d) => d.name === c.name);
+      return def ? { ...c, desc: def.desc, spankDesc: def.spankDesc } : c;
+    });
+    settings.minigames = settings.minigames.map((g) => {
+      const def = DEFAULT_MINIGAMES.find((d) => d.name === g.name);
+      return def ? { ...g, desc: def.desc } : g;
+    });
+  }
+  if (savedRev < SETTINGS_REV) {
     settings.rev = SETTINGS_REV;
     saveSettings();
   }
@@ -515,6 +556,7 @@ const state = {
   massagerOn: false,
   posture: "",
   posturePool: [],
+  postureDrawn: [],
 };
 
 /* ---------------- 棋盘渲染 ---------------- */
@@ -898,6 +940,12 @@ async function spinTriple(tier, { minCruelty = 1, durMult = 1 } = {}) {
   };
 }
 
+/** 一句话概括本次判决，用于行内文案和日志 */
+function drawSummary(draw) {
+  if (draw.spank) return `👋 打脚心 ${draw.hits} 下`;
+  return `${draw.tool.name} 挠 ${draw.part} ${fmtMin(draw.minutes)}`;
+}
+
 /** 判决卡上的行刑描述 */
 function verdictText(draw) {
   if (draw.spank) {
@@ -907,19 +955,36 @@ function verdictText(draw) {
   return `用 <b>${CRUELTY_ICON[draw.tool.cruelty]}${esc(draw.tool.name)}</b> 挠 <b>${esc(draw.part)}</b><br>整整 <b>${fmtMin(draw.minutes)}</b>！`;
 }
 
-/** 把挑战文案里的占位符替换成本次判决（打脚心时把「用X挠Y」整体换成打脚心） */
-function fillChallengeDesc(desc, draw) {
+/**
+ * 填充挑战文案。抽中打脚心时优先用挑战自带的 spankDesc（内容不变、挠痒换成打脚心），
+ * 自定义挑战没有 spankDesc 时退化为自动改写「用X挠Y」。
+ */
+function fillChallengeDesc(tpl, draw) {
+  const desc = typeof tpl === "string" ? tpl : tpl.desc;
+  const spankDesc = typeof tpl === "string" ? "" : tpl.spankDesc;
+  const spankPhrase = `<b>👋 打脚心 ${draw.hits} 下</b>`;
+
   if (draw.spank) {
+    if (spankDesc) {
+      return spankDesc
+        .replaceAll("{spank}", spankPhrase)
+        .replaceAll("{hits}", `<b>${draw.hits}</b>`)
+        .replaceAll("{dur}", `<b>${draw.hits} 下</b>`);
+    }
     return desc
-      .replace(/\{tool\}(狂?挠)(\{part\}|脚心)/g, "<b>👋 打脚心</b>")
+      .replace(/\{tool\}(狂?挠)(\{part\}|脚心|腋窝|肚子)/g, "<b>👋 打脚心</b>")
+      .replaceAll("{spank}", spankPhrase)
       .replaceAll("{tool}", "<b>👋 巴掌</b>")
       .replaceAll("{part}", "<b>脚心</b>")
+      .replaceAll("{hits}", `<b>${draw.hits}</b>`)
       .replaceAll("{dur}", `<b>${draw.hits} 下</b>`);
   }
   return desc
     .replaceAll("{tool}", `<b>${esc(draw.tool.name)}</b>`)
     .replaceAll("{part}", `<b>${esc(draw.part)}</b>`)
-    .replaceAll("{dur}", `<b>${fmtMin(draw.minutes)}</b>`);
+    .replaceAll("{dur}", `<b>${fmtMin(draw.minutes)}</b>`)
+    .replaceAll("{spank}", `<b>${esc(draw.tool.name)}</b> 挠 <b>${esc(draw.part)}</b> ${fmtMin(draw.minutes)}`)
+    .replaceAll("{hits}", `<b>${fmtMin(draw.minutes)}</b>`);
 }
 
 /** 有重抽卡时，允许把整套判决重抽一次 */
@@ -935,8 +1000,13 @@ async function offerReroll(verdictHtml, goText) {
   return showModal(verdictHtml, buttons);
 }
 
-/** 每层开始时抽取本层固定姿势。不重复模式下抽过的姿势会从轮盘上消失 */
-async function drawPosture(layer) {
+/**
+ * 抽取某层的固定姿势。只在首次进入该层时抽（传送门回头再进不会重抽），
+ * force = true 用于终点走过头后玩家主动要求换姿势。
+ * 不重复模式下抽过的姿势会从轮盘上消失。
+ */
+async function drawPosture(layer, { force = false } = {}) {
+  if (!force && state.postureDrawn.includes(layer)) return;
   if (!settings.postures.length) { state.posture = "自由姿势"; return; }
 
   if (!settings.uniquePosture) {
@@ -948,15 +1018,20 @@ async function drawPosture(layer) {
   }
 
   const items = state.posturePool.map((p) => ({ label: p, value: p, weight: 1 }));
-  const it = await spinWheel(`🧘 抽取第 ${layer + 1} 层固定姿势`, items);
+  const it = await spinWheel(
+    force ? "🧘 重新抽取本层姿势" : `🧘 抽取第 ${layer + 1} 层固定姿势`,
+    items
+  );
   state.posture = it.value;
   if (settings.uniquePosture) {
     const idx = state.posturePool.indexOf(it.value);
     if (idx >= 0) state.posturePool.splice(idx, 1);
   }
+  if (!state.postureDrawn.includes(layer)) state.postureDrawn.push(layer);
   $("#posture-badge").textContent = `🧘 ${it.value}`;
   addLog(
-    `🧘 第 ${layer + 1} 层姿势：${it.value}（整层保持${settings.uniquePosture ? "，之后不再出现" : ""}）`,
+    (force ? `🧘 重新抽取姿势：${it.value}` : `🧘 第 ${layer + 1} 层姿势：${it.value}`) +
+    `（整层保持${settings.uniquePosture ? "，之后不再出现" : ""}）`,
     true
   );
 }
@@ -1311,9 +1386,8 @@ async function punishFlow({ tier, minCruelty = 1, durMult = 1, prefix = "", vict
     [{ text: "继续冒险", value: 1 }]
   );
   addLog(
-    draw.spank
-      ? `👋 ${victim} 完成惩罚：打脚心 ${draw.hits} 下${failCount ? `（加罚${failCount}次）` : ""}`
-      : `🕷️ ${victim} 完成惩罚：${draw.tool.name}挠${draw.part} ${fmtMin(draw.minutes)}${failCount ? `（喊停${failCount}次）` : ""}`
+    `${draw.spank ? "👋" : "🕷️"} ${victim} 完成惩罚：${drawSummary(draw)}` +
+    (failCount ? `（${draw.spank ? "加罚" : "喊停"}${failCount}次）` : "")
   );
   return "done";
 }
@@ -1355,7 +1429,7 @@ async function handleChallenge(cell, tier) {
     const verdict = cardHTML({
       icon: draw.spank ? "👋" : "⚔️", tag: TAGS.challenge[0], tagCls: TAGS.challenge[1],
       title: cell.tpl.name,
-      desc: fillChallengeDesc(cell.tpl.desc, draw),
+      desc: fillChallengeDesc(cell.tpl, draw),
       sub: `姿势保持【${esc(state.posture)}】。结束后由双方共同裁定挑战是否成功。`,
     });
     const choice = await offerReroll(verdict, draw.spank ? "👋 开始挑战" : "⏱️ 开始挑战");
@@ -1428,7 +1502,7 @@ async function handleInterrogate(cell, tier) {
       icon: "🎤", tag: TAGS.interrogate[0], tagCls: TAGS.interrogate[1],
       title: "拷问时间",
       desc: esc(cell.tpl),
-      sub: "如实照做即可安全通过；硬挺到底就要接受挠痒拷问，扛过去也算赢！",
+      sub: "如实照做即可安全通过；硬挺到底就要上刑拷问（挠痒或打脚心由轮盘决定），扛过去也算赢！",
     }),
     [
       { text: "😳 如实照做（过关）", cls: "btn-success", value: false },
@@ -1445,15 +1519,15 @@ async function handleInterrogate(cell, tier) {
     return;
   }
 
-  addLog(`🎤 ${settings.victim} 选择硬挺，接受挠痒拷问！`, true);
+  addLog(`🎤 ${settings.victim} 选择硬挺，接受上刑拷问！`, true);
   await showModal(
     cardHTML({
       icon: "😈", title: "敬酒不吃吃罚酒",
-      desc: "那就用挠痒撬开你的嘴！扛过整段时间就算你赢，中途招供也可以喊停。",
+      desc: "那就动手撬开你的嘴！扛过整段刑罚就算你赢，中途招供也可以喊停。",
     }),
     [{ text: "上刑吧", cls: "btn-danger", value: 1 }]
   );
-  const r = await punishFlow({ tier, prefix: "挠痒拷问！" });
+  const r = await punishFlow({ tier, prefix: "拷问上刑！" });
   if (r !== "surrender") {
     await showModal(
       cardHTML({ icon: "🫡", title: "嘴真硬！", desc: "扛过了拷问，什么都没招。佩服！" }),
@@ -1467,12 +1541,47 @@ async function handleMinigame(cell, tier) {
     .replaceAll("{master}", `<b>${esc(settings.master)}</b>`)
     .replaceAll("{victim}", `<b>${esc(settings.victim)}</b>`);
 
-  const win = await showModal(
+  await showAutoModal(
     cardHTML({
       icon: "🎯", tag: TAGS.minigame[0], tagCls: TAGS.minigame[1],
       title: cell.tpl.name,
-      desc,
-      sub: "赢了继续飞行棋；输了接受部位、工具、时长三连抽惩罚！玩完后按真实结果点下方按钮。",
+      desc: `保持本层姿势【<b>${esc(state.posture)}</b>】。<br>先抽出玩游戏时的「干扰」：部位、工具、时长三连抽……`,
+      sub: "边被折腾边玩，赢了继续前进！",
+    }),
+    2000
+  );
+
+  let draw = await spinTriple(tier, { durMult: 0.6 });
+
+  while (true) {
+    const interference = draw.spank
+      ? `👋 干扰：全程被 <b>打脚心 ${draw.hits} 下</b>，边被打边玩！`
+      : `🪶 干扰：全程被 <b>${CRUELTY_ICON[draw.tool.cruelty]}${esc(draw.tool.name)}</b> 挠 <b>${esc(draw.part)}</b>（共 <b>${fmtMin(draw.minutes)}</b>），边被挠边玩！`;
+    const verdict = cardHTML({
+      icon: draw.spank ? "👋" : "🎯", tag: TAGS.minigame[0], tagCls: TAGS.minigame[1],
+      title: cell.tpl.name,
+      desc: `${desc}<br><br>${interference}`,
+      sub: "赢了继续飞行棋；输了接受一次完整的三连抽惩罚！",
+    });
+    const choice = await offerReroll(verdict, draw.spank ? "👋 开始游戏" : "⏱️ 开始游戏");
+    if (choice !== "reroll") break;
+    state.rerollCards--;
+    updateRollHint();
+    addLog(`🎲 ${settings.victim} 用掉一张重抽卡，重抽游戏干扰组合！`, true);
+    AudioFX.magic();
+    draw = await spinTriple(tier, { durMult: 0.6 });
+  }
+
+  const { result } = await runPunishment(draw, {
+    title: `游戏进行中：${esc(cell.tpl.name)}`,
+    canEarlyFinish: true,
+  });
+  if (result === "surrender") { await doSurrender(); return; }
+
+  const win = await showModal(
+    cardHTML({
+      icon: "⚖️", title: "裁决时刻",
+      desc: `${esc(settings.master)}裁定：${esc(settings.victim)}在「${esc(cell.tpl.name)}」中赢了吗？`,
     }),
     [
       { text: "🏆 我赢了", cls: "btn-success", value: true },
@@ -1482,7 +1591,7 @@ async function handleMinigame(cell, tier) {
 
   if (win) {
     AudioFX.success();
-    addLog(`🎯 ${settings.victim} 在「${cell.tpl.name}」中获胜！`, true);
+    addLog(`🎯 ${settings.victim} 顶着「${drawSummary(draw)}」的干扰赢下了「${cell.tpl.name}」！`, true);
     await showModal(
       cardHTML({ icon: "🏆", title: "旗开得胜！", desc: "游戏获胜，安全通过本格！" }),
       [{ text: "继续前进", value: 1 }]
@@ -1616,16 +1725,15 @@ async function handlePortal() {
       icon: "🌀", tag: "🌀 传送门", tagCls: "tag-danger",
       title: "脚下一空……",
       desc: "地板裂开了！你摔回了<b>上一层</b>的同一位置……",
-      sub: "刚才的努力，白费了呢。（落地后重新抽取该层的固定姿势）",
+      sub: `刚才的努力，白费了呢。（姿势保持不变，仍是【${esc(state.posture)}】）`,
     }),
     [{ text: "啊啊啊啊", cls: "btn-danger", value: 1 }]
   );
   state.pos -= LAYER_SIZE;
   const backLayer = layerOf(state.pos);
-  addLog(`🌀 踩中传送门！摔回第 ${backLayer + 1} 层`, true);
+  addLog(`🌀 踩中传送门！摔回第 ${backLayer + 1} 层（姿势不变）`, true);
   renderBoard(backLayer);
   await sleep(300);
-  await drawPosture(backLayer);
 }
 
 async function doSurrender() {
@@ -1667,15 +1775,15 @@ const DEX_CELLS = [
   ["start", "起点 / 层起点", "每层的出发格，安全无事件。"],
   ["punish", "惩罚格", "部位、工具、时长三个轮盘同时开抽，以本层固定姿势被挠。中途撑不住喊停 = 加时3分钟，休息后继续。层数越高，残忍工具概率越大、时长越长（最长30分钟）。若开局勾选了「打脚心」并抽中它，则忽略部位改为打脚心，下数 = 时长分钟数×2。持有重抽卡时，判决出来后可以整套重抽。"],
   ["challenge", "挑战格", "同样三连抽后进行挑战。成功安全通过；失败默认触发加倍惩罚（工具至少「残忍」级、时长×1.5），奖惩均可在开局前自定义。"],
-  ["interrogate", "拷问格", "如实招供/照做即可过关；选择硬挺则接受挠痒拷问，扛过全程也算赢。"],
-  ["minigame", "游戏格", "猜数字 / 24点 / 脚心写字猜字。赢了继续飞行棋，输了接受三连抽惩罚。"],
+  ["interrogate", "拷问格", "如实招供/照做即可过关；选择硬挺则接受三连抽上刑拷问（挠痒或打脚心），扛过全程也算赢。"],
+  ["minigame", "游戏格", "猜数字 / 24点 / 脚心写字猜字。开局先三连抽出「干扰」——边被挠（或边被打脚心）边玩游戏。赢了继续飞行棋，输了再接受一次完整的三连抽惩罚。"],
   ["massager", "按摩仪格", "「固定」：把按摩仪绑上脚心一直嗡嗡作响；「取下」：解脱！只有脚上有按摩仪时取下格才有效。（需在开局前勾选道具）"],
   ["sock", "袜子格", "脱袜子/穿袜子等小事件，影响接下来脚部的「防御力」。"],
   ["reward", "奖励格", "休息、喝饮料、前进2格、免罚护体卡、重抽卡等好事，越往后越稀少。重抽卡可以在判决出来后把工具、部位、时长整套重抽。"],
   ["reverse", "反杀格", "第二层起才会出现！被惩罚者反客为主，甩骰子决定次数（1~3次），反过来挠协助者。"],
-  ["portal", "传送门", "仅最后一层出现。踩中直接摔回上一层的同一位置……"],
-  ["stairs", "层间入口", "位于棋盘中心。碰到就自动进入下一层（不会走过头），并抽取新一层的固定姿势。"],
-  ["goal", "终点", "只在最后一层出现，必须正好踩中，走过头原地不动。通关奖励可在初始页自定义，默认无。"],
+  ["portal", "传送门", "仅最后一层出现。踩中直接摔回上一层的同一位置，姿势保持不变；之后重新爬回来也不会换姿势。"],
+  ["stairs", "层间入口", "位于棋盘中心。碰到就自动进入下一层（不会走过头）。只有<b>首次</b>进入某层才抽该层姿势，回头再进沿用原姿势。"],
+  ["goal", "终点", "只在最后一层出现，必须正好踩中，走过头原地不动（每次走过头都可以选择要不要重新抽姿势）。通关奖励可在初始页自定义，默认无。"],
 ];
 
 function dexReplace(s) {
@@ -1736,14 +1844,14 @@ function buildDexHtml() {
     `<h3>🗺️ 格子总览</h3>${cellRows}` +
     `<h3>🧘 姿势库（每层抽一次，整层保持）</h3>${postureRows}` +
     `<h3>🎯 部位库（每次惩罚/挑战抽取）</h3>${partRows}` +
-    `<h3>⚔️ 挑战库 <span class="dex-hint">可用 {tool} {part} {dur} 代表轮盘结果</span></h3>` +
+    `<h3>⚔️ 挑战库 <span class="dex-hint">可用 {tool} {part} {dur} 代表轮盘结果；抽到打脚心会自动改写文案</span></h3>` +
     `${chalRows}` +
     `<div class="dex-add-row">` +
     `<input id="dex-chal-name" placeholder="挑战名称" maxlength="16">` +
     `<input id="dex-chal-desc" placeholder="规则说明，例如：被{tool}挠{part}{dur}不许笑" maxlength="120">` +
     `<button type="button" class="btn btn-small" data-add="challenges">添加</button>` +
     `</div>` +
-    `<h3>🎯 游戏格玩法 <span class="dex-hint">可用 {master} {victim}</span></h3>` +
+    `<h3>🎯 游戏格玩法 <span class="dex-hint">可用 {master} {victim}；游戏全程会有三连抽的干扰</span></h3>` +
     `${gameRows}` +
     `<div class="dex-add-row">` +
     `<input id="dex-game-name" placeholder="游戏名称" maxlength="16">` +
@@ -1765,7 +1873,7 @@ function buildDexHtml() {
     `</div>` +
     `<h3>📈 难度规则</h3>` +
     `<div class="dex-item">层数可选 3~7 层，难度分三档随层数递进：温柔档时长 1~5 分钟；残忍档 3~12 分钟；地狱档 5~30 分钟且极刑工具概率最高。「手指」出现概率被调高，「羽毛」略微调低。</div>` +
-    `<div class="dex-item">👋 <b>打脚心</b>（需在开局勾选）：抽中后忽略部位轮盘，直接打脚心，下数 = 时长分钟数 × 2，行刑面板改为点击计数；中途躲脚加罚 ${SPANK_FAIL_ADD_HITS} 下。</div>` +
+    `<div class="dex-item">👋 <b>打脚心</b>（需在开局勾选）：所有会转工具轮盘的地方都可能抽到（惩罚、挑战、游戏干扰、拷问、反杀、失败加罚）。抽中后忽略部位轮盘，直接打脚心，下数 = 时长分钟数 × 2，行刑面板改为点击计数；中途躲脚加罚 ${SPANK_FAIL_ADD_HITS} 下。挑战和游戏的内容不变，只是把「挠痒」换成「打脚心」。</div>` +
     `<div class="dex-item">🎲 <b>重抽卡</b>：来自奖励格，可累积。惩罚或挑战的判决出来后，被惩罚的一方可以用掉一张，把工具、部位、时长整套重抽（觉得时间太长就靠它翻盘）。</div>` +
     `</div>`
   );
@@ -1889,9 +1997,11 @@ async function enterNextLayer() {
     cardHTML({
       icon: "🪜", title: `进入 ${layerName(nextLayer)}！`,
       desc: "拐进棋盘中心，自动登上下一层！<br>奖励：原地休息 2 分钟再继续。",
-      sub: tierOf(nextLayer) === 2
-        ? "这里是地狱档，工具更残忍、时间更长，做好觉悟……"
-        : "接下来的惩罚会逐渐加重哦。",
+      sub: state.postureDrawn.includes(nextLayer)
+        ? `这层来过了，姿势沿用【${esc(state.posture)}】不变。`
+        : tierOf(nextLayer) === 2
+          ? "这里是地狱档，工具更残忍、时间更长，做好觉悟……"
+          : "接下来的惩罚会逐渐加重哦。",
     }),
     2600
   );
@@ -1932,6 +2042,24 @@ async function dispatchCell() {
   }
 }
 
+/** 终点走过头后，可以选择换一个本层姿势（久攻不下时换个花样） */
+async function offerPostureRedraw() {
+  if (!settings.postures.length) return;
+  const yes = await showModal(
+    cardHTML({
+      icon: "🧘", title: "又没进终点……",
+      desc: `当前姿势是【<b>${esc(state.posture)}</b>】。<br>要不要趁这次机会<b>重新抽一个姿势</b>？`,
+      sub: "换了就按新姿势继续；不换就保持原样。",
+    }),
+    [
+      { text: "🎡 换一个姿势", cls: "btn-warn", value: true },
+      { text: "不换，继续", cls: "btn-success", value: false },
+    ]
+  );
+  if (!yes) { addLog("🧘 选择保持原姿势继续。"); return; }
+  await drawPosture(layerOf(state.pos), { force: true });
+}
+
 async function onRoll() {
   if (state.busy || state.over) return;
   state.busy = true;
@@ -1950,6 +2078,7 @@ async function onRoll() {
     addLog(`😵 掷出 ${n} 点但只差 ${remaining} 格，走过头无效！`, true);
     document.body.classList.add("shake");
     setTimeout(() => document.body.classList.remove("shake"), 500);
+    await offerPostureRedraw();
   } else {
     const entered = await moveSteps(n);
     if (!entered) await dispatchCell();
@@ -2038,6 +2167,7 @@ async function startGame() {
   saveSettings();
 
   state.posturePool = settings.postures.slice();
+  state.postureDrawn = [];
 
   state.layers = settings.layers;
   state.pos = 0;
