@@ -119,6 +119,8 @@ const AudioFX = {
 /* ---------------- 游戏内容数据 ---------------- */
 const LS_KEY = "tickle_ludo_settings_v2";
 const LS_KEY_V1 = "tickle_ludo_settings_v1";
+// 内容库版本：升级时对老存档做一次性内容迁移
+const SETTINGS_REV = 3;
 
 const DEFAULT_TOOLS = [
   { name: "手指", cruelty: 1 },
@@ -131,6 +133,11 @@ const DEFAULT_TOOLS = [
 
 // 按名称微调抽中概率：手指更常见，羽毛略少
 const NAME_BIAS = { "手指": 1.7, "羽毛": 0.55 };
+
+// 特殊工具：勾选后加入轮盘。抽中则忽略部位，改为打脚心，下数 = 时长(分钟)×2
+const SPANK_TOOL = { name: "打脚心", cruelty: 3, spank: true };
+const SPANK_HITS_PER_MIN = 2;
+const SPANK_FAIL_ADD_HITS = 6;
 
 const DEFAULT_POSTURES = [
   "趴着", "跪坐", "平躺", "站立双手吊起", "驷马束缚", "大字束缚", "足枷", "刑椅",
@@ -189,12 +196,18 @@ const SOCK_EVENTS = [
   "🧦 由对方亲自帮你脱袜子——动作会很慢，很仪式感……",
 ];
 
+const REROLL_REWARD = {
+  icon: "🎲",
+  text: "获得重抽卡！在任何惩罚/挑战的判决出来后，可以用它把工具、部位、时长整套重抽一次。",
+  reroll: true,
+};
+
 const DEFAULT_REWARDS = [
   { icon: "🛋️", text: "休息5分钟！对方还要给你捏捏肩放松一下。" },
   { icon: "🧃", text: "喝饮料时间！对方去给你倒一杯你喜欢的饮料。" },
-  { icon: "🍪", text: "投喂时间！吃点小零食，补充体力再战。" },
   { icon: "🦶", text: "顺风顺水！直接前进2格！", move: 2 },
   { icon: "🛡️", text: "获得免罚护体卡！下一个惩罚格自动失效。", shield: true },
+  { ...REROLL_REWARD },
 ];
 
 const DEFAULT_MINIGAMES = [
@@ -215,6 +228,7 @@ function defaultSettings() {
     postures: DEFAULT_POSTURES.slice(),
     massager: true,
     spank: false,
+    rev: SETTINGS_REV,
     layers: 3,
     ultimate: DEFAULT_ULTIMATE,
     chalReward: "",
@@ -231,15 +245,21 @@ let settings = defaultSettings();
 
 function loadSettings() {
   settings = defaultSettings();
+  // 没有存档时按最新版本处理；有存档则以存档里记录的版本为准
+  let savedRev = SETTINGS_REV;
   try {
     const raw = localStorage.getItem(LS_KEY);
     if (raw) {
       const s = JSON.parse(raw);
-      if (s && typeof s === "object") Object.assign(settings, s);
+      if (s && typeof s === "object") {
+        savedRev = Number(s.rev) || 0;
+        Object.assign(settings, s);
+      }
     } else {
       // 从 v1 存档迁移
       const rawV1 = localStorage.getItem(LS_KEY_V1);
       if (rawV1) {
+        savedRev = 0;
         const s1 = JSON.parse(rawV1);
         if (s1 && typeof s1 === "object") {
           if (s1.victim) settings.victim = s1.victim;
@@ -262,8 +282,15 @@ function loadSettings() {
   if (!Array.isArray(settings.interrogations)) settings.interrogations = DEFAULT_INTERROGATIONS.slice();
   if (!Array.isArray(settings.rewards)) settings.rewards = DEFAULT_REWARDS.map((r) => ({ ...r }));
   if (typeof settings.winReward !== "string") settings.winReward = "";
-  if (typeof settings.spank !== "boolean") settings.spank = false;
   settings.layers = Math.min(7, Math.max(3, Number(settings.layers) || 3));
+
+  // 老存档迁移：移除吃东西奖励，补上重抽卡
+  if (savedRev < 3) {
+    settings.rewards = settings.rewards.filter((r) => !/投喂|零食|吃点/.test(r.text || ""));
+    if (!settings.rewards.some((r) => r.reroll)) settings.rewards.push({ ...REROLL_REWARD });
+    settings.rev = SETTINGS_REV;
+    saveSettings();
+  }
 }
 
 function saveSettings() {
@@ -416,6 +443,7 @@ const state = {
   busy: false,
   over: false,
   shield: false,
+  rerollCards: 0,
   shownLayer: 0,
   layers: 3,
   massagerOn: false,
@@ -746,29 +774,12 @@ function spinWheelsMulti(title, defs) {
   });
 }
 
-const SPANK_TOOL = { name: "打脚心", cruelty: 2, spank: true };
-
-function isSpankTool(tool) {
-  return !!(tool && (tool.spank || tool.name === "打脚心"));
-}
-
-function applySpank(drawn) {
-  if (!isSpankTool(drawn.tool)) return { ...drawn, spank: false, hits: 0 };
-  return {
-    ...drawn,
-    spank: true,
-    part: "脚心",
-    hits: Math.max(1, Math.round(Number(drawn.minutes) * 2)),
-  };
-}
-
 function toolItems(tier, minCruelty = 1) {
-  let pool = settings.tools.filter((t) => t.cruelty >= minCruelty && !isSpankTool(t));
-  if (settings.spank && SPANK_TOOL.cruelty >= minCruelty) {
-    pool = pool.concat(SPANK_TOOL);
-  }
-  if (!pool.length) pool = settings.tools.filter((t) => !isSpankTool(t)).slice();
-  if (!pool.length && settings.spank) pool = [SPANK_TOOL];
+  const all = settings.spank
+    ? settings.tools.concat([{ ...SPANK_TOOL }])
+    : settings.tools.slice();
+  let pool = all.filter((t) => t.cruelty >= minCruelty);
+  if (!pool.length) pool = all.slice();
   return pool.map((t) => ({
     label: `${CRUELTY_ICON[t.cruelty]}${t.name}`,
     value: t,
@@ -776,26 +787,85 @@ function toolItems(tier, minCruelty = 1) {
   }));
 }
 
-function durationItems(tier) {
-  return DURATION_WHEELS[tier].map((d) => ({ label: fmtMin(d.v), value: d.v, weight: d.w }));
+/** 按倍率缩放基础时长，取整成好读的数值（上限 30 分钟） */
+function scaleMinutes(v, mult) {
+  const raw = Math.min(30, v * mult);
+  if (raw >= 3) return Math.round(raw);
+  return Math.max(0.5, Math.round(raw * 2) / 2);
+}
+
+/**
+ * 时长轮盘。倍率直接作用在刻度上，保证轮盘显示的就是最终执行时长；
+ * 缩放后重复的刻度会合并权重。
+ */
+function durationItems(tier, mult = 1) {
+  const merged = new Map();
+  DURATION_WHEELS[tier].forEach((d) => {
+    const v = scaleMinutes(d.v, mult);
+    merged.set(v, (merged.get(v) || 0) + d.w);
+  });
+  return [...merged.keys()]
+    .sort((a, b) => a - b)
+    .map((v) => ({ label: fmtMin(v), value: v, weight: merged.get(v) }));
 }
 
 function partItems() {
   return BODY_PARTS.map((p) => ({ label: p, value: p, weight: 1 }));
 }
 
-/** 部位 + 工具 + 时长 三轮盘同抽。抽中打脚心时忽略部位，次数 = 分钟 × 2 */
+/** 部位 + 工具 + 时长 三轮盘同抽。抽中「打脚心」则忽略部位，改为按下数行刑 */
 async function spinTriple(tier, { minCruelty = 1, durMult = 1 } = {}) {
   const [part, tool, dur] = await spinWheelsMulti("🎡 命运三连抽", [
     { name: "🎯 部位", items: partItems() },
     { name: "🧤 工具", items: toolItems(tier, minCruelty) },
-    { name: "⏱️ 时长", items: durationItems(tier) },
+    { name: "⏱️ 时长", items: durationItems(tier, durMult) },
   ]);
-  return applySpank({
-    part: part.value,
+  const minutes = dur.value;
+  const spank = !!tool.value.spank;
+  return {
     tool: tool.value,
-    minutes: Math.min(30, dur.value * durMult),
-  });
+    part: spank ? "脚心" : part.value,
+    minutes,
+    spank,
+    hits: Math.max(2, Math.round(minutes * SPANK_HITS_PER_MIN)),
+  };
+}
+
+/** 判决卡上的行刑描述 */
+function verdictText(draw) {
+  if (draw.spank) {
+    return `被 <b>👋 打脚心 ${draw.hits} 下</b>！<br>` +
+      `<span style="font-size:13px;color:var(--text-dim)">（时长轮盘 ${fmtMin(draw.minutes)} × 2，部位轮盘结果作废）</span>`;
+  }
+  return `用 <b>${CRUELTY_ICON[draw.tool.cruelty]}${esc(draw.tool.name)}</b> 挠 <b>${esc(draw.part)}</b><br>整整 <b>${fmtMin(draw.minutes)}</b>！`;
+}
+
+/** 把挑战文案里的占位符替换成本次判决（打脚心时把「用X挠Y」整体换成打脚心） */
+function fillChallengeDesc(desc, draw) {
+  if (draw.spank) {
+    return desc
+      .replace(/\{tool\}(狂?挠)(\{part\}|脚心)/g, "<b>👋 打脚心</b>")
+      .replaceAll("{tool}", "<b>👋 巴掌</b>")
+      .replaceAll("{part}", "<b>脚心</b>")
+      .replaceAll("{dur}", `<b>${draw.hits} 下</b>`);
+  }
+  return desc
+    .replaceAll("{tool}", `<b>${esc(draw.tool.name)}</b>`)
+    .replaceAll("{part}", `<b>${esc(draw.part)}</b>`)
+    .replaceAll("{dur}", `<b>${fmtMin(draw.minutes)}</b>`);
+}
+
+/** 有重抽卡时，允许把整套判决重抽一次 */
+async function offerReroll(verdictHtml, goText) {
+  const buttons = [];
+  if (state.rerollCards > 0) {
+    buttons.push({
+      text: `🎲 用重抽卡重抽（剩 ${state.rerollCards} 张）`,
+      cls: "btn-warn", value: "reroll",
+    });
+  }
+  buttons.push({ text: goText, cls: "btn-danger", value: "go" });
+  return showModal(verdictHtml, buttons);
 }
 
 /** 每层开始时抽取本层固定姿势 */
@@ -954,127 +1024,139 @@ function runTimer(opts) {
   });
 }
 
-/** 打脚心计数器：每点一下记一记，打满即结束 */
-function runHits(opts) {
+/**
+ * 计数式行刑（打脚心）：按「记一下」累计，达到目标下数即结束。
+ * 返回 { result: 'done'|'early'|'surrender', failCount }
+ */
+function runCounter(opts) {
   return new Promise((resolve) => {
-    const initialHits = Math.max(1, Math.round(opts.hits));
-    let doneHits = 0;
-    let total = initialHits;
+    const initialTarget = opts.count;
+    let target = initialTarget;
+    let hit = 0;
     let failCount = 0;
+    let display, bar, status;
 
-    function stop(result) {
+    function render() {
+      display.textContent = `${hit} / ${target}`;
+      display.classList.toggle("warning", target - hit <= 3);
+      bar.style.width = Math.min(100, (hit / target) * 100) + "%";
+    }
+
+    function finish(result) {
       closeModal();
       resolve({ result, failCount });
     }
 
-    async function confirmSurrender() {
-      const sure = await showModal(
-        cardHTML({
-          icon: "⚠️", title: "确定认输？",
-          desc: "认输将直接触发终极惩罚，没有回头路！",
-          sub: "终极惩罚的内容是保密的，认输之后才会揭晓……",
-        }),
-        [
-          { text: "我再坚持一下", cls: "btn-success", value: false },
-          { text: "🏳️ 我认输……", cls: "btn-danger", value: true },
-        ]
-      );
-      if (sure) { resolve({ result: "surrender", failCount }); return; }
-      buildUI();
-    }
-
     function buildUI() {
       modalEl.innerHTML =
-        `<div class="modal-icon">🦶</div>` +
+        `<div class="modal-icon">👋</div>` +
         `<h2>${opts.title}</h2>` +
         `<p class="modal-desc">${opts.desc}</p>` +
-        `<div class="timer-display" id="hit-display"></div>` +
-        `<p class="hit-remain" id="hit-remain"></p>` +
-        `<div class="timer-bar-wrap"><div class="timer-bar" id="timer-bar"></div></div>` +
-        `<p class="timer-status" id="timer-status">每打一下，点一下「打了一下」</p>` +
-        `<div class="modal-buttons" id="timer-buttons"></div>`;
+        `<div class="timer-display" id="counter-display"></div>` +
+        `<div class="timer-bar-wrap"><div class="timer-bar" id="counter-bar" style="width:0%"></div></div>` +
+        `<p class="timer-status" id="counter-status">每打一下点一次「记一下」</p>` +
+        `<div class="modal-buttons" id="counter-buttons"></div>`;
       overlay.classList.add("active");
 
-      const display = $("#hit-display");
-      const remain = $("#hit-remain");
-      const bar = $("#timer-bar");
-      const status = $("#timer-status");
-      const btns = $("#timer-buttons");
-
-      function render() {
-        display.textContent = `${doneHits} / ${total}`;
-        remain.textContent = `还剩 ${Math.max(0, total - doneHits)} 下`;
-        bar.style.width = Math.min(100, (doneHits / total) * 100) + "%";
-      }
+      display = $("#counter-display");
+      bar = $("#counter-bar");
+      status = $("#counter-status");
+      const btns = $("#counter-buttons");
 
       const hitBtn = document.createElement("button");
-      hitBtn.className = "btn btn-danger btn-big";
-      hitBtn.textContent = "🦶 打了一下";
+      hitBtn.className = "btn btn-primary btn-big";
+      hitBtn.textContent = "👋 记一下";
       hitBtn.onclick = () => {
-        doneHits++;
-        AudioFX.diceLand();
-        document.body.classList.add("shake");
-        setTimeout(() => document.body.classList.remove("shake"), 280);
-        if (doneHits >= total) {
+        hit++;
+        AudioFX.step();
+        if (hit >= target) {
+          render();
           AudioFX.success();
-          stop("done");
+          finish("done");
           return;
         }
         render();
       };
       btns.appendChild(hitBtn);
 
-      if (opts.failAddsHits) {
-        const failBtn = document.createElement("button");
-        failBtn.className = "btn btn-warn";
-        failBtn.textContent = `😫 撑不住了（+${opts.failAddsHits}下）`;
-        failBtn.onclick = () => {
-          failCount++;
-          total += opts.failAddsHits;
-          status.textContent = `加了 ${opts.failAddsHits} 下，继续打！`;
-          AudioFX.fail();
-          render();
-        };
-        btns.appendChild(failBtn);
-      }
-
-      if (opts.canEarlyFinish) {
-        const earlyBtn = document.createElement("button");
-        earlyBtn.className = "btn btn-success";
-        earlyBtn.textContent = "✅ 提前完成";
-        earlyBtn.onclick = () => { AudioFX.ding(); stop("early"); };
-        btns.appendChild(earlyBtn);
-      }
+      const failBtn = document.createElement("button");
+      failBtn.className = "btn btn-warn";
+      failBtn.textContent = `😫 躲了/缩脚了（+${SPANK_FAIL_ADD_HITS}下）`;
+      failBtn.onclick = () => {
+        failCount++;
+        target += SPANK_FAIL_ADD_HITS;
+        AudioFX.fail();
+        status.textContent = `已加罚 ${SPANK_FAIL_ADD_HITS} 下！乖乖伸好脚。`;
+        render();
+      };
+      btns.appendChild(failBtn);
 
       const giveUpBtn = document.createElement("button");
       giveUpBtn.className = "btn btn-danger";
       giveUpBtn.textContent = "🏳️ 认输";
-      giveUpBtn.onclick = confirmSurrender;
+      giveUpBtn.onclick = async () => {
+        const sure = await showModal(
+          cardHTML({
+            icon: "⚠️", title: "确定认输？",
+            desc: "认输将直接触发终极惩罚，没有回头路！",
+            sub: "终极惩罚的内容是保密的，认输之后才会揭晓……",
+          }),
+          [
+            { text: "我再坚持一下", cls: "btn-success", value: false },
+            { text: "🏳️ 我认输……", cls: "btn-danger", value: true },
+          ]
+        );
+        if (sure) { resolve({ result: "surrender", failCount }); return; }
+        buildUI();
+        render();
+      };
       btns.appendChild(giveUpBtn);
 
+      // 小字工具按钮：跳过计数 / 重新计数
       const mini = document.createElement("div");
       mini.className = "timer-mini-row";
       const skipBtn = document.createElement("button");
       skipBtn.className = "btn-mini";
-      skipBtn.textContent = "⏭ 跳过读秒";
-      skipBtn.onclick = () => { AudioFX.ding(); stop("done"); };
+      skipBtn.textContent = "⏭ 跳过计数";
+      skipBtn.title = "直接视为打完";
+      skipBtn.onclick = () => { AudioFX.ding(); finish("done"); };
       mini.appendChild(skipBtn);
       const resetBtn = document.createElement("button");
       resetBtn.className = "btn-mini";
       resetBtn.textContent = "🔄 重新计数";
+      resetBtn.title = "清零，从头开始数";
       resetBtn.onclick = () => {
-        doneHits = 0;
-        total = initialHits;
-        failCount = 0;
+        hit = 0;
+        target = initialTarget;
         AudioFX.tick();
         buildUI();
+        render();
+        status.textContent = "已清零，重新开始数！";
       };
       mini.appendChild(resetBtn);
       modalEl.appendChild(mini);
-      render();
     }
 
     buildUI();
+    render();
+  });
+}
+
+/** 根据判决自动选择倒计时或计数面板 */
+function runPunishment(draw, { title, canEarlyFinish = false }) {
+  if (draw.spank) {
+    return runCounter({
+      title,
+      desc: `👋 打脚心 × ${draw.hits} 下`,
+      count: draw.hits,
+    });
+  }
+  return runTimer({
+    title,
+    desc: `${esc(draw.tool.name)} × ${esc(draw.part)}`,
+    minutes: draw.minutes,
+    failAddsMinutes: canEarlyFinish ? 0 : 3,
+    canEarlyFinish,
   });
 }
 
@@ -1106,73 +1188,50 @@ async function punishFlow({ tier, minCruelty = 1, durMult = 1, prefix = "", vict
     2000
   );
 
-  const drawn = await spinTriple(tier, { minCruelty, durMult });
-  const { part, tool, minutes, spank, hits } = drawn;
+  let draw = await spinTriple(tier, { minCruelty, durMult });
 
-  if (spank) {
-    await showModal(
-      cardHTML({
-        icon: "🦶", tag: TAGS.punish[0], tagCls: TAGS.punish[1],
-        title: "最终判决 · 打脚心！",
-        desc: (withPosture ? `${esc(victim)} 以【<b>${esc(state.posture)}</b>】固定，<br>` : `${esc(victim)} `) +
-          `部位轮盘作废！被 ${esc(master)} <b>打脚心</b> 共 <b>${hits}</b> 下！`,
-        sub: `次数规则：时长 ${fmtMin(minutes)} × 2 = ${hits} 下。打一下点一下计数。` +
-          (state.massagerOn && withPosture ? "<br>📳 脚心上的按摩仪仍在嗡嗡工作中……" : ""),
-      }),
-      [{ text: "🦶 开始打脚心", cls: "btn-danger", value: 1 }]
-    );
-
-    const { result, failCount } = await runHits({
-      title: "打脚心进行中",
-      desc: `目标 ${hits} 下（由 ${fmtMin(minutes)} × 2 算出）`,
-      hits,
-      failAddsHits: 2,
-    });
-    if (result === "surrender") { await doSurrender(); return "surrender"; }
-    await showModal(
-      cardHTML({
-        icon: "🎉", title: "打完了！",
-        desc: failCount > 0
-          ? `中途加了 ${failCount} 次下数，${esc(victim)} 还是挨完了 ${hits} 下起的全部！`
-          : `${esc(victim)} 挨完了全部 ${hits} 下！`,
-      }),
-      [{ text: "继续冒险", value: 1 }]
-    );
-    addLog(`🦶 ${victim} 完成打脚心 ${hits} 下${failCount ? `（加罚${failCount}次）` : ""}`);
-    return "done";
-  }
-
-  await showModal(
-    cardHTML({
-      icon: "😈", tag: TAGS.punish[0], tagCls: TAGS.punish[1],
+  // 判决出来后，被惩罚者可以用重抽卡把整套组合重抽
+  while (true) {
+    const verdict = cardHTML({
+      icon: draw.spank ? "👋" : "😈", tag: TAGS.punish[0], tagCls: TAGS.punish[1],
       title: "最终判决",
       desc: (withPosture ? `${esc(victim)} 以【<b>${esc(state.posture)}</b>】固定，<br>` : `${esc(victim)} `) +
-        `被 ${esc(master)} 用 <b>${CRUELTY_ICON[tool.cruelty]}${esc(tool.name)}</b> 挠 <b>${esc(part)}</b><br>整整 <b>${fmtMin(minutes)}</b>！`,
-      sub: "中途撑不住可以喊停，但要加时3分钟，休息后继续。" +
+        `被 ${esc(master)} ` + verdictText(draw),
+      sub: (draw.spank
+        ? `中途躲脚可以加罚 ${SPANK_FAIL_ADD_HITS} 下。`
+        : "中途撑不住可以喊停，但要加时3分钟，休息后继续。") +
         (state.massagerOn && withPosture ? "<br>📳 脚心上的按摩仪仍在嗡嗡工作中……" : ""),
-    }),
-    [{ text: "⏱️ 开始行刑", cls: "btn-danger", value: 1 }]
-  );
+    });
+    const choice = await offerReroll(verdict, draw.spank ? "👋 开始行刑" : "⏱️ 开始行刑");
+    if (choice !== "reroll") break;
+    state.rerollCards--;
+    updateRollHint();
+    addLog(`🎲 ${victim} 用掉一张重抽卡，重抽判决！`, true);
+    AudioFX.magic();
+    draw = await spinTriple(tier, { minCruelty, durMult });
+  }
 
-  const { result, failCount } = await runTimer({
-    title: "行刑中",
-    desc: `${esc(tool.name)} × ${esc(part)}`,
-    minutes,
-    failAddsMinutes: 3,
-  });
+  const { result, failCount } = await runPunishment(draw, { title: "行刑中" });
 
   if (result === "surrender") { await doSurrender(); return "surrender"; }
 
+  const extraNote = draw.spank
+    ? `（共加罚 ${failCount * SPANK_FAIL_ADD_HITS} 下）`
+    : `（共加时 ${failCount * 3} 分钟）`;
   await showModal(
     cardHTML({
       icon: "🎉", title: "刑满释放！",
       desc: failCount > 0
-        ? `虽然中途喊停了 ${failCount} 次（共加时 ${failCount * 3} 分钟），但${esc(victim)}还是熬过来了！`
+        ? `虽然中途撑不住了 ${failCount} 次${extraNote}，但${esc(victim)}还是熬过来了！`
         : `${esc(victim)}一次都没有喊停，太顽强了！`,
     }),
     [{ text: "继续冒险", value: 1 }]
   );
-  addLog(`🕷️ ${victim} 完成惩罚：${tool.name}挠${part} ${fmtMin(minutes)}${failCount ? `（喊停${failCount}次）` : ""}`);
+  addLog(
+    draw.spank
+      ? `👋 ${victim} 完成惩罚：打脚心 ${draw.hits} 下${failCount ? `（加罚${failCount}次）` : ""}`
+      : `🕷️ ${victim} 完成惩罚：${draw.tool.name}挠${draw.part} ${fmtMin(draw.minutes)}${failCount ? `（喊停${failCount}次）` : ""}`
+  );
   return "done";
 }
 
@@ -1207,38 +1266,28 @@ async function handleChallenge(cell, tier) {
     2000
   );
 
-  const drawn = await spinTriple(tier, { durMult: 0.6 });
-  const { part, tool, minutes, spank, hits } = drawn;
-  const desc = cell.tpl.desc
-    .replaceAll("{tool}", `<b>${esc(spank ? "打脚心" : tool.name)}</b>`)
-    .replaceAll("{part}", `<b>${esc(part)}</b>`)
-    .replaceAll("{dur}", spank ? `<b>打脚心 ${hits} 下</b>` : `<b>${fmtMin(minutes)}</b>`);
+  let draw = await spinTriple(tier, { durMult: 0.6 });
 
-  await showModal(
-    cardHTML({
-      icon: spank ? "🦶" : "⚔️", tag: TAGS.challenge[0], tagCls: TAGS.challenge[1],
-      title: spank ? `${cell.tpl.name} · 打脚心` : cell.tpl.name,
-      desc,
-      sub: spank
-        ? `姿势保持【${esc(state.posture)}】。部位轮盘作废，改为打脚心 ${hits} 下（时长 ${fmtMin(minutes)} × 2）。打完后由双方裁定挑战是否成功。`
-        : `姿势保持【${esc(state.posture)}】。计时结束后，由双方共同裁定挑战是否成功。`,
-    }),
-    [{ text: spank ? "🦶 开始打脚心" : "⏱️ 开始挑战", value: 1 }]
-  );
+  while (true) {
+    const verdict = cardHTML({
+      icon: draw.spank ? "👋" : "⚔️", tag: TAGS.challenge[0], tagCls: TAGS.challenge[1],
+      title: cell.tpl.name,
+      desc: fillChallengeDesc(cell.tpl.desc, draw),
+      sub: `姿势保持【${esc(state.posture)}】。结束后由双方共同裁定挑战是否成功。`,
+    });
+    const choice = await offerReroll(verdict, draw.spank ? "👋 开始挑战" : "⏱️ 开始挑战");
+    if (choice !== "reroll") break;
+    state.rerollCards--;
+    updateRollHint();
+    addLog(`🎲 ${settings.victim} 用掉一张重抽卡，重抽挑战组合！`, true);
+    AudioFX.magic();
+    draw = await spinTriple(tier, { durMult: 0.6 });
+  }
 
-  const { result } = spank
-    ? await runHits({
-        title: "挑战 · 打脚心",
-        desc: cell.tpl.name,
-        hits,
-        canEarlyFinish: true,
-      })
-    : await runTimer({
-        title: "挑战进行中",
-        desc: cell.tpl.name,
-        minutes,
-        canEarlyFinish: true,
-      });
+  const { result } = await runPunishment(draw, {
+    title: "挑战进行中",
+    canEarlyFinish: true,
+  });
   if (result === "surrender") { await doSurrender(); return; }
 
   const success = await showModal(
@@ -1425,6 +1474,7 @@ async function handleReward(cell) {
   );
   addLog(`🎁 奖励：${cell.tpl.text}`, true);
   if (cell.tpl.shield) state.shield = true;
+  if (cell.tpl.reroll) { state.rerollCards++; updateRollHint(); }
   if (cell.tpl.move) {
     if (layerOf(state.pos) === state.layers - 1 && state.pos + cell.tpl.move > GOAL) {
       addLog("🦶 前进会越过终点，原地不动。");
@@ -1532,13 +1582,13 @@ async function doWin() {
 /* ---------------- 图鉴 ---------------- */
 const DEX_CELLS = [
   ["start", "起点 / 层起点", "每层的出发格，安全无事件。"],
-  ["punish", "惩罚格", "部位、工具、时长三个轮盘同时开抽，以本层固定姿势被挠。若启用并抽中「打脚心」，则忽略部位，改为打脚心，次数 = 时长分钟 × 2。中途撑不住喊停 = 加时3分钟（打脚心则加2下），休息后继续。"],
+  ["punish", "惩罚格", "部位、工具、时长三个轮盘同时开抽，以本层固定姿势被挠。中途撑不住喊停 = 加时3分钟，休息后继续。层数越高，残忍工具概率越大、时长越长（最长30分钟）。若开局勾选了「打脚心」并抽中它，则忽略部位改为打脚心，下数 = 时长分钟数×2。持有重抽卡时，判决出来后可以整套重抽。"],
   ["challenge", "挑战格", "同样三连抽后进行挑战。成功安全通过；失败默认触发加倍惩罚（工具至少「残忍」级、时长×1.5），奖惩均可在开局前自定义。"],
   ["interrogate", "拷问格", "如实招供/照做即可过关；选择硬挺则接受挠痒拷问，扛过全程也算赢。"],
   ["minigame", "游戏格", "猜数字 / 24点 / 脚心写字猜字。赢了继续飞行棋，输了接受三连抽惩罚。"],
   ["massager", "按摩仪格", "「固定」：把按摩仪绑上脚心一直嗡嗡作响；「取下」：解脱！只有脚上有按摩仪时取下格才有效。（需在开局前勾选道具）"],
   ["sock", "袜子格", "脱袜子/穿袜子等小事件，影响接下来脚部的「防御力」。"],
-  ["reward", "奖励格", "休息、吃喝、前进2格、免罚护体卡等好事，越往后越稀少。"],
+  ["reward", "奖励格", "休息、喝饮料、前进2格、免罚护体卡、重抽卡等好事，越往后越稀少。重抽卡可以在判决出来后把工具、部位、时长整套重抽。"],
   ["reverse", "反杀格", "第二层起才会出现！被惩罚者反客为主，甩骰子决定次数（1~3次），反过来挠协助者。"],
   ["portal", "传送门", "仅最后一层出现。踩中直接摔回上一层的同一位置……"],
   ["stairs", "层间入口", "位于棋盘中心。碰到就自动进入下一层（不会走过头），并抽取新一层的固定姿势。"],
@@ -1627,7 +1677,9 @@ function buildDexHtml() {
     `<button type="button" class="btn btn-small" data-add="rewards">添加</button>` +
     `</div>` +
     `<h3>📈 难度规则</h3>` +
-    `<div class="dex-item">层数可选 3~7 层，难度分三档随层数递进：温柔档时长 1~5 分钟；残忍档 3~12 分钟；地狱档 5~30 分钟且极刑工具概率最高。「手指」出现概率被调高，「羽毛」略微调低。若勾选「打脚心」工具并抽中：忽略部位，改为打脚心，次数 = 时长分钟 × 2。</div>` +
+    `<div class="dex-item">层数可选 3~7 层，难度分三档随层数递进：温柔档时长 1~5 分钟；残忍档 3~12 分钟；地狱档 5~30 分钟且极刑工具概率最高。「手指」出现概率被调高，「羽毛」略微调低。</div>` +
+    `<div class="dex-item">👋 <b>打脚心</b>（需在开局勾选）：抽中后忽略部位轮盘，直接打脚心，下数 = 时长分钟数 × 2，行刑面板改为点击计数；中途躲脚加罚 ${SPANK_FAIL_ADD_HITS} 下。</div>` +
+    `<div class="dex-item">🎲 <b>重抽卡</b>：来自奖励格，可累积。惩罚或挑战的判决出来后，被惩罚的一方可以用掉一张，把工具、部位、时长整套重抽（觉得时间太长就靠它翻盘）。</div>` +
     `</div>`
   );
 }
@@ -1815,16 +1867,22 @@ async function onRoll() {
     const entered = await moveSteps(n);
     if (!entered) await dispatchCell();
 
-    const left = GOAL - state.pos;
-    if (!state.over && left > 0) {
-      $("#roll-hint").textContent =
-        `距离终点还有 ${left} 格` +
-        `${state.shield ? "（🛡️护体中）" : ""}${state.massagerOn ? "（📳按摩仪工作中）" : ""}`;
-    }
+    if (!state.over && GOAL - state.pos > 0) updateRollHint();
   }
 
   state.busy = false;
   rollBtn.disabled = state.over;
+}
+
+/** 刷新骰子下方的状态提示（剩余格数 / 持有的卡） */
+function updateRollHint() {
+  const left = GOAL - state.pos;
+  if (left <= 0) return;
+  $("#roll-hint").textContent =
+    `距离终点还有 ${left} 格` +
+    (state.shield ? "（🛡️护体中）" : "") +
+    (state.massagerOn ? "（📳按摩仪工作中）" : "") +
+    (state.rerollCards > 0 ? `（🎲重抽卡×${state.rerollCards}）` : "");
 }
 
 /* ---------------- 彩带 ---------------- */
@@ -1895,6 +1953,7 @@ async function startGame() {
   state.busy = true;
   state.over = false;
   state.shield = false;
+  state.rerollCards = 0;
   state.massagerOn = false;
   state.posture = "";
 

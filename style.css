@@ -553,7 +553,6 @@ body {
   transition: width .5s linear;
 }
 .timer-status { font-size: 14px; color: var(--text-dim); min-height: 22px; }
-.hit-remain { font-size: 18px; color: var(--text-dim); margin-top: -6px; }
 
 /* 计时器小字工具按钮（跳过/重置） */
 .timer-mini-row {
