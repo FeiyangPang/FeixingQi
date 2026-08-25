@@ -158,7 +158,7 @@ const DURATION_WHEELS = [
   [ { v: 5, w: 2 }, { v: 8, w: 3 }, { v: 10, w: 3 }, { v: 15, w: 2 }, { v: 20, w: 2 }, { v: 25, w: 1 }, { v: 30, w: 1 } ],
 ];
 
-const CHALLENGES = [
+const DEFAULT_CHALLENGES = [
   { name: "忍笑挑战", desc: "被{tool}挠{part}{dur}，全程不许笑出声。可以憋、可以扭，但笑出声即失败！" },
   { name: "木头人", desc: "保持姿势一动不动，被{tool}挠{part}{dur}。明显移动或躲闪即失败！" },
   { name: "静音模式", desc: "被{tool}挠{part}{dur}，不许发出任何声音（笑声、叫声、求饶通通算失败）！" },
@@ -173,7 +173,7 @@ const CHALLENGES = [
   { name: "花式求饶", desc: "被{tool}挠{part}{dur}，必须不重样地花式求饶不许停嘴，但绝对不许说「停」字，说了即失败！" },
 ];
 
-const INTERROGATIONS = [
+const DEFAULT_INTERROGATIONS = [
   "如实说出自己的小名或最羞耻的外号，并让对方连叫3遍！",
   "交出手机，让对方随意翻看相册1分钟（或自选3张照片展示并讲解）！",
   "看着对方的眼睛，大声叫3声「主人」！",
@@ -189,7 +189,7 @@ const SOCK_EVENTS = [
   "🧦 由对方亲自帮你脱袜子——动作会很慢，很仪式感……",
 ];
 
-const REWARDS = [
+const DEFAULT_REWARDS = [
   { icon: "🛋️", text: "休息5分钟！对方还要给你捏捏肩放松一下。" },
   { icon: "🧃", text: "喝饮料时间！对方去给你倒一杯你喜欢的饮料。" },
   { icon: "🍪", text: "投喂时间！吃点小零食，补充体力再战。" },
@@ -197,7 +197,7 @@ const REWARDS = [
   { icon: "🛡️", text: "获得免罚护体卡！下一个惩罚格自动失效。", shield: true },
 ];
 
-const MINIGAMES = [
+const DEFAULT_MINIGAMES = [
   { name: "猜数字", desc: "{master}心里想一个 1~100 的数字，{victim}最多猜 7 次，每次提示「大了/小了」。7 次内猜中即获胜！" },
   { name: "24点", desc: "{master}随机报出 4 个 1~10 的数字，{victim}在 60 秒内用加减乘除算出 24 即获胜（可心算或口述过程）！" },
   { name: "脚心写字猜字", desc: "{master}用手指在{victim}的脚心上一笔一画写一个字，{victim}忍着痒最多猜 3 次，猜中即获胜！" },
@@ -218,6 +218,11 @@ function defaultSettings() {
     ultimate: DEFAULT_ULTIMATE,
     chalReward: "",
     chalFail: "",
+    winReward: "",
+    challenges: DEFAULT_CHALLENGES.map((c) => ({ ...c })),
+    minigames: DEFAULT_MINIGAMES.map((g) => ({ ...g })),
+    interrogations: DEFAULT_INTERROGATIONS.slice(),
+    rewards: DEFAULT_REWARDS.map((r) => ({ ...r })),
   };
 }
 
@@ -251,6 +256,11 @@ function loadSettings() {
   } catch (e) { /* 忽略损坏的存档 */ }
   if (!Array.isArray(settings.tools) || !settings.tools.length) settings.tools = DEFAULT_TOOLS.map((t) => ({ ...t }));
   if (!Array.isArray(settings.postures) || !settings.postures.length) settings.postures = DEFAULT_POSTURES.slice();
+  if (!Array.isArray(settings.challenges)) settings.challenges = DEFAULT_CHALLENGES.map((c) => ({ ...c }));
+  if (!Array.isArray(settings.minigames)) settings.minigames = DEFAULT_MINIGAMES.map((g) => ({ ...g }));
+  if (!Array.isArray(settings.interrogations)) settings.interrogations = DEFAULT_INTERROGATIONS.slice();
+  if (!Array.isArray(settings.rewards)) settings.rewards = DEFAULT_REWARDS.map((r) => ({ ...r }));
+  if (typeof settings.winReward !== "string") settings.winReward = "";
   settings.layers = Math.min(7, Math.max(3, Number(settings.layers) || 3));
 }
 
@@ -354,18 +364,29 @@ function buildLayerContent(layer) {
   if (isFinal) counts.portal = 2;                // 传送门只在最后一层
   if (settings.massager) counts.massager = 1;    // 有按摩仪道具才出现按摩仪格
 
-  // 补齐/裁剪到 16 格
+  // 对应内容库被删空时，该类型格子不再生成
+  if (!settings.challenges.length) delete counts.challenge;
+  if (!settings.minigames.length) delete counts.minigame;
+  if (!settings.interrogations.length) delete counts.interrogate;
+  if (!settings.rewards.length) delete counts.reward;
+
+  // 补齐/裁剪到 16 格（只在仍存在的类型之间补）
   let total = Object.values(counts).reduce((s, n) => s + n, 0);
-  while (total < 16) { counts[pick(["punish", "challenge"])]++; total++; }
+  const fillPool = ["punish"];
+  if (counts.challenge) fillPool.push("challenge");
+  while (total < 16) { counts[pick(fillPool)]++; total++; }
   while (total > 16) {
     if (counts.punish > 2) counts.punish--;
     else if (counts.challenge > 2) counts.challenge--;
-    else counts.interrogate--;
+    else if (counts.interrogate > 1) counts.interrogate--;
+    else break;
     total--;
   }
   // 每局小幅扰动，让布局更不可预测
-  if (Math.random() < 0.5 && counts.punish > 3) { counts.punish--; counts.challenge++; }
-  else if (counts.challenge > 3) { counts.challenge--; counts.punish++; }
+  if (counts.challenge) {
+    if (Math.random() < 0.5 && counts.punish > 3) { counts.punish--; counts.challenge++; }
+    else if (counts.challenge > 3) { counts.challenge--; counts.punish++; }
+  }
 
   const types = [];
   for (const [type, count] of Object.entries(counts)) {
@@ -377,11 +398,11 @@ function buildLayerContent(layer) {
   for (let local = 1; local <= 16; local++) {
     const type = mixed[local - 1];
     const cell = { type };
-    if (type === "challenge") cell.tpl = pick(CHALLENGES);
-    if (type === "interrogate") cell.tpl = pick(INTERROGATIONS);
+    if (type === "challenge") cell.tpl = pick(settings.challenges);
+    if (type === "interrogate") cell.tpl = pick(settings.interrogations);
     if (type === "sock") cell.tpl = pick(SOCK_EVENTS);
-    if (type === "reward") cell.tpl = pick(REWARDS);
-    if (type === "minigame") cell.tpl = pick(MINIGAMES);
+    if (type === "reward") cell.tpl = pick(settings.rewards);
+    if (type === "minigame") cell.tpl = pick(settings.minigames);
     if (type === "massager") cell.tpl = { mode: state.massagerOn ? "off" : "on" };
     board[base + local] = cell;
   }
@@ -513,11 +534,12 @@ function addLog(text, important = false) {
 const overlay = $("#modal-overlay");
 const modalEl = $("#modal");
 
-function closeModal() { overlay.classList.remove("active"); }
+function closeModal() { overlay.classList.remove("active"); modalEl.classList.remove("wide"); }
 
 /** 自动关闭的提示弹窗（无需点击） */
 function showAutoModal(html, ms = 2200) {
   return new Promise((resolve) => {
+    modalEl.classList.remove("wide");
     modalEl.innerHTML = html;
     overlay.classList.add("active");
     setTimeout(() => { closeModal(); resolve(); }, ms);
@@ -530,6 +552,7 @@ function showAutoModal(html, ms = 2200) {
  */
 function showModal(html, buttons) {
   return new Promise((resolve) => {
+    modalEl.classList.remove("wide");
     modalEl.innerHTML = html;
     const wrap = document.createElement("div");
     wrap.className = "modal-buttons";
@@ -566,9 +589,9 @@ function drawWheel(ctx, items, rotation, highlight = -1) {
   const size = ctx.canvas.width;
   const cx = size / 2, cy = size / 2, r = size / 2 - 4;
   const seg = (Math.PI * 2) / items.length;
-  const fontSize = size < 220 ? 9 : 14;
-  const textOff = size < 220 ? 8 : 12;
-  const hubR = size < 220 ? 17 : 26;
+  const fontSize = size < 200 ? 11 : size < 260 ? 15 : 16;
+  const textOff = size < 200 ? 10 : 14;
+  const hubR = size < 200 ? 20 : 28;
   ctx.clearRect(0, 0, size, size);
   for (let i = 0; i < items.length; i++) {
     const a0 = rotation + i * seg - Math.PI / 2;
@@ -599,9 +622,9 @@ function drawWheel(ctx, items, rotation, highlight = -1) {
   ctx.strokeStyle = "rgba(255,255,255,.3)";
   ctx.stroke();
   ctx.fillStyle = "#ffd45e";
-  ctx.font = `${size < 220 ? 14 : 20}px sans-serif`;
+  ctx.font = `${size < 200 ? 16 : 22}px sans-serif`;
   ctx.textAlign = "center";
-  ctx.fillText("🎯", cx, cy + (size < 220 ? 5 : 7));
+  ctx.fillText("🎯", cx, cy + (size < 200 ? 6 : 8));
 }
 
 /** 单个大轮盘（用于姿势抽取），自动旋转自动关闭 */
@@ -658,13 +681,14 @@ function spinWheel(title, items) {
  */
 function spinWheelsMulti(title, defs) {
   return new Promise((resolve) => {
+    modalEl.classList.add("wide");
     let html = `<h2>${title}</h2><div class="wheels-row">`;
     defs.forEach((d, i) => {
       html +=
         `<div class="wheel-box small">` +
         `<div class="wheel-mini-title">${esc(d.name)}</div>` +
         `<div class="wheel-pointer">▲</div>` +
-        `<canvas class="wheel-canvas" id="wheel-c${i}" width="170" height="170"></canvas>` +
+        `<canvas class="wheel-canvas" id="wheel-c${i}" width="250" height="250"></canvas>` +
         `<div class="wheel-mini-result" id="wheel-r${i}"></div>` +
         `</div>`;
     });
@@ -1300,12 +1324,15 @@ async function doWin() {
   state.over = true;
   AudioFX.fanfare();
   launchConfetti();
+  const rewardText = (settings.winReward || "").trim();
   await showModal(
     `<div class="final-screen">` +
     cardHTML({
       icon: "🏆", title: "通关成功！！",
       desc: `<b>${esc(settings.victim)}</b> 穿越了 ${state.layers} 层挠痒地狱，抵达终点！`,
-      sub: `奖励：今晚免受一切惩罚，还可以命令 ${esc(settings.master)} 做一件事（合理范围内）！`,
+      sub: rewardText
+        ? `🏆 终极奖励：${esc(rewardText).replaceAll("\n", "<br>")}`
+        : "恭喜通关！（未设置额外终极奖励）",
     }) + `</div>`,
     [{ text: "🔄 再来一局", value: 1 }]
   );
@@ -1325,48 +1352,153 @@ const DEX_CELLS = [
   ["reverse", "反杀格", "第二层起才会出现！被惩罚者反客为主，甩骰子决定次数（1~3次），反过来挠协助者。"],
   ["portal", "传送门", "仅最后一层出现。踩中直接摔回上一层的同一位置……"],
   ["stairs", "层间入口", "位于棋盘中心。碰到就自动进入下一层（不会走过头），并抽取新一层的固定姿势。"],
-  ["goal", "终点", "只在最后一层出现，必须正好踩中，走过头原地不动。通关奖励：今晚免受一切惩罚 + 命令对方一件事。"],
+  ["goal", "终点", "只在最后一层出现，必须正好踩中，走过头原地不动。通关奖励可在初始页自定义，默认无。"],
 ];
 
 function dexReplace(s) {
   return esc(s)
     .replaceAll("{tool}", "〔轮盘工具〕")
     .replaceAll("{part}", "〔轮盘部位〕")
-    .replaceAll("{dur}", "〔轮盘时长〕");
+    .replaceAll("{dur}", "〔轮盘时长〕")
+    .replaceAll("{master}", "协助者")
+    .replaceAll("{victim}", "被惩罚者");
 }
 
-async function showDex() {
+function dexEditableItem(kind, i, innerHtml) {
+  return (
+    `<div class="dex-item editable">` +
+    `<span class="dex-body">${innerHtml}</span>` +
+    `<button type="button" class="dex-del" data-del="${kind}" data-i="${i}" title="删除">✕</button>` +
+    `</div>`
+  );
+}
+
+function buildDexHtml() {
   const cellRows = DEX_CELLS.map(([type, name, desc]) =>
     `<div class="dex-item dex-cell"><span class="dex-ico">${CELL_META[type].icon}</span><span><b>${name}</b>：${desc}</span></div>`
   ).join("");
-  const postureRows = `<div class="dex-item">${settings.postures.map(esc).join(" ｜ ")}</div>`;
+  const postureRows = `<div class="dex-item">${settings.postures.map(esc).join(" ｜ ") || "（空）"}</div>`;
   const partRows = `<div class="dex-item">${BODY_PARTS.map(esc).join(" ｜ ")}</div>`;
-  const chalRows = CHALLENGES.map((c) =>
-    `<div class="dex-item"><b>${esc(c.name)}</b>：${dexReplace(c.desc)}</div>`
-  ).join("");
-  const gameRows = MINIGAMES.map((g) =>
-    `<div class="dex-item"><b>${esc(g.name)}</b>：${dexReplace(g.desc).replaceAll("{master}", "协助者").replaceAll("{victim}", "被惩罚者")}</div>`
-  ).join("");
-  const interRows = INTERROGATIONS.map((t) => `<div class="dex-item">${esc(t)}</div>`).join("");
-  const sockRows = SOCK_EVENTS.map((t) => `<div class="dex-item">${esc(t)}</div>`).join("");
-  const rewardRows = REWARDS.map((r) => `<div class="dex-item">${r.icon} ${esc(r.text)}</div>`).join("");
 
-  await showModal(
+  const chalRows = settings.challenges.length
+    ? settings.challenges.map((c, i) =>
+        dexEditableItem("challenges", i, `<b>${esc(c.name)}</b>：${dexReplace(c.desc)}`)
+      ).join("")
+    : `<div class="dex-item">（已清空，棋盘上不会再出现挑战格）</div>`;
+  const gameRows = settings.minigames.length
+    ? settings.minigames.map((g, i) =>
+        dexEditableItem("minigames", i, `<b>${esc(g.name)}</b>：${dexReplace(g.desc)}`)
+      ).join("")
+    : `<div class="dex-item">（已清空，棋盘上不会再出现游戏格）</div>`;
+  const interRows = settings.interrogations.length
+    ? settings.interrogations.map((t, i) =>
+        dexEditableItem("interrogations", i, esc(t))
+      ).join("")
+    : `<div class="dex-item">（已清空，棋盘上不会再出现拷问格）</div>`;
+  const rewardRows = settings.rewards.length
+    ? settings.rewards.map((r, i) =>
+        dexEditableItem("rewards", i, `${r.icon || "🎁"} ${esc(r.text)}`)
+      ).join("")
+    : `<div class="dex-item">（已清空，棋盘上不会再出现奖励格）</div>`;
+  const sockRows = SOCK_EVENTS.map((t) => `<div class="dex-item">${esc(t)}</div>`).join("");
+
+  return (
     `<div class="modal-icon">📖</div><h2>格子图鉴</h2>` +
+    `<p class="modal-sub">下面带 ✕ 的条目都可以删掉，也可以在各库底部添加你们自己的玩法。改动会立刻保存。</p>` +
     `<div class="dex">` +
     `<h3>🗺️ 格子总览</h3>${cellRows}` +
     `<h3>🧘 姿势库（每层抽一次，整层保持）</h3>${postureRows}` +
     `<h3>🎯 部位库（每次惩罚/挑战抽取）</h3>${partRows}` +
-    `<h3>⚔️ 挑战库</h3>${chalRows}` +
-    `<h3>🎯 游戏格玩法</h3>${gameRows}` +
-    `<h3>🎤 拷问库</h3>${interRows}` +
+    `<h3>⚔️ 挑战库 <span class="dex-hint">可用 {tool} {part} {dur} 代表轮盘结果</span></h3>` +
+    `${chalRows}` +
+    `<div class="dex-add-row">` +
+    `<input id="dex-chal-name" placeholder="挑战名称" maxlength="16">` +
+    `<input id="dex-chal-desc" placeholder="规则说明，例如：被{tool}挠{part}{dur}不许笑" maxlength="120">` +
+    `<button type="button" class="btn btn-small" data-add="challenges">添加</button>` +
+    `</div>` +
+    `<h3>🎯 游戏格玩法 <span class="dex-hint">可用 {master} {victim}</span></h3>` +
+    `${gameRows}` +
+    `<div class="dex-add-row">` +
+    `<input id="dex-game-name" placeholder="游戏名称" maxlength="16">` +
+    `<input id="dex-game-desc" placeholder="玩法说明，赢了过关、输了受罚" maxlength="120">` +
+    `<button type="button" class="btn btn-small" data-add="minigames">添加</button>` +
+    `</div>` +
+    `<h3>🎤 拷问库</h3>` +
+    `${interRows}` +
+    `<div class="dex-add-row">` +
+    `<input id="dex-inter-text" placeholder="新的拷问内容" maxlength="80">` +
+    `<button type="button" class="btn btn-small" data-add="interrogations">添加</button>` +
+    `</div>` +
     `<h3>🧦 袜子事件</h3>${sockRows}` +
-    `<h3>🎁 奖励库</h3>${rewardRows}` +
+    `<h3>🎁 奖励库</h3>` +
+    `${rewardRows}` +
+    `<div class="dex-add-row">` +
+    `<input id="dex-reward-text" placeholder="新的奖励内容" maxlength="80">` +
+    `<button type="button" class="btn btn-small" data-add="rewards">添加</button>` +
+    `</div>` +
     `<h3>📈 难度规则</h3>` +
     `<div class="dex-item">层数可选 3~7 层，难度分三档随层数递进：温柔档时长 1~5 分钟；残忍档 3~12 分钟；地狱档 5~30 分钟且极刑工具概率最高。「手指」出现概率被调高，「羽毛」略微调低。</div>` +
-    `</div>`,
-    [{ text: "关闭图鉴", value: 1 }]
+    `</div>`
   );
+}
+
+function bindDexEditors() {
+  modalEl.querySelectorAll("[data-del]").forEach((btn) => {
+    btn.onclick = () => {
+      const kind = btn.dataset.del;
+      const i = Number(btn.dataset.i);
+      if (!Array.isArray(settings[kind])) return;
+      settings[kind].splice(i, 1);
+      saveSettings();
+      AudioFX.tick();
+      fillDex();
+    };
+  });
+  modalEl.querySelectorAll("[data-add]").forEach((btn) => {
+    btn.onclick = () => {
+      const kind = btn.dataset.add;
+      if (kind === "challenges") {
+        const name = ($("#dex-chal-name")?.value || "").trim();
+        const desc = ($("#dex-chal-desc")?.value || "").trim();
+        if (!name || !desc) return;
+        settings.challenges.push({ name, desc });
+      } else if (kind === "minigames") {
+        const name = ($("#dex-game-name")?.value || "").trim();
+        const desc = ($("#dex-game-desc")?.value || "").trim();
+        if (!name || !desc) return;
+        settings.minigames.push({ name, desc });
+      } else if (kind === "interrogations") {
+        const text = ($("#dex-inter-text")?.value || "").trim();
+        if (!text) return;
+        settings.interrogations.push(text);
+      } else if (kind === "rewards") {
+        const text = ($("#dex-reward-text")?.value || "").trim();
+        if (!text) return;
+        settings.rewards.push({ icon: "🎁", text });
+      } else return;
+      saveSettings();
+      AudioFX.ding();
+      fillDex();
+    };
+  });
+  modalEl.querySelectorAll(".dex-add-row input").forEach((inp) => {
+    inp.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") inp.parentElement.querySelector("[data-add]")?.click();
+    });
+  });
+}
+
+function fillDex() {
+  modalEl.innerHTML = buildDexHtml() +
+    `<div class="modal-buttons"><button type="button" class="btn btn-primary" id="btn-dex-close">关闭图鉴</button></div>`;
+  bindDexEditors();
+  $("#btn-dex-close").onclick = () => { AudioFX.tick(); closeModal(); };
+}
+
+function showDex() {
+  modalEl.classList.add("wide");
+  overlay.classList.add("active");
+  fillDex();
 }
 
 /* ---------------- 掷骰子 & 移动 ---------------- */
@@ -1556,6 +1688,7 @@ async function startGame() {
   settings.massager = $("#input-massager").checked;
   settings.chalReward = $("#input-chal-reward").value.trim();
   settings.chalFail = $("#input-chal-fail").value.trim();
+  settings.winReward = $("#input-win-reward").value.trim();
   if (!settings.tools.length) {
     settings.tools = DEFAULT_TOOLS.map((t) => ({ ...t }));
     renderToolList();
@@ -1618,6 +1751,7 @@ function init() {
   $("#input-massager").checked = settings.massager;
   $("#input-chal-reward").value = settings.chalReward || "";
   $("#input-chal-fail").value = settings.chalFail || "";
+  $("#input-win-reward").value = settings.winReward || "";
   renderToolList();
   renderPostureList();
 
